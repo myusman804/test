@@ -1,0 +1,1 @@
+mongodb+srv://money:CiPlNyfI3W9qadpn@cluster0.h9gggik.mongodb.net/auth_db?retryWrites=true&w=majority&appName=Cluster0
