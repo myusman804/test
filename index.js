@@ -1,27 +1,32 @@
-const express = require("express")
-const connectDB = require("./config/db")
-const dotenv = require("dotenv") // Import dotenv
+const express = require("express");
+const connectDB = require("./config/db");
+const dotenv = require("dotenv");
 
 // Load environment variables
-dotenv.config()
+dotenv.config();
 
 // Connect to MongoDB
-connectDB()
+connectDB();
 
-const app = express()
+const app = express();
 
-app.use(express.json()) // Middleware to parse JSON
+app.use(express.json()); // Middleware to parse JSON
 
-// Remove express-session middleware as we are switching to JWT
-// app.use(session({
-//     secret: 'supersecretkey',
-//     resave: false,
-//     saveUninitialized: true,
-//     cookie: { secure: false }
-// }));
+// Routes
+const authRoutes = require("./routes/authRoute");
+const referralRoutes = require("./routes/referralRoutes");
 
-const authRoutes = require("./routes/authRoute")
-app.use("/api/auth", authRoutes)
+app.use("/api/auth", authRoutes);
+app.use("/api/referral", referralRoutes);
 
-const PORT = process.env.PORT || 3000 // Use PORT from .env or default to 3000
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "AdsMoney API is running",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

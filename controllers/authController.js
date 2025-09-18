@@ -1,66 +1,121 @@
 const User = require("../models/User");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
-const bcrypt = require("bcryptjs"); // Import bcryptjs for password hashing
-const jwt = require("jsonwebtoken"); // Import jsonwebtoken for JWT creation
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const {
   createVerificationEmailHTML,
   createResendOTPEmailHTML,
 } = require("../templete/emailTemplete");
+const {
+  generateReferralCode,
+  verifyReferralCode,
+  processReferralReward,
+} = require("../utils/referralUtils");
 
 // Email Transporter Setup
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER, // Use environment variable
-    pass: process.env.EMAIL_PASS, // Use environment variable
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
 // Generate OTP
 const generateOTP = () => crypto.randomInt(100000, 999999).toString();
 
-// Register User and Send OTP
+// Register User and Send OTP with Referral Support
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, referralCode } = req.body;
 
+    // Check if user already exists
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ message: "User already exists" });
 
-    // Hash password before saving
+    // Verify referral code if provided
+    let referrerData = null;
+    if (referralCode) {
+      const referralVerification = await verifyReferralCode(referralCode);
+      if (!referralVerification.valid) {
+        return res.status(400).json({
+          message: referralVerification.message,
+        });
+      }
+      referrerData = referralVerification.referrer;
+    }
+
+    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const otp = generateOTP();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // OTP valid for 10 minutes
+    // Generate unique referral code for new user
+    let userReferralCode;
+    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 10;
 
-    user = new User({ name, email, password: hashedPassword, otp, otpExpiry });
+    while (!isUnique && attempts < maxAttempts) {
+      userReferralCode = generateReferralCode(name, email);
+      const existingUser = await User.findOne({
+        referralCode: userReferralCode,
+      });
+      if (!existingUser) {
+        isUnique = true;
+      }
+      attempts++;
+    }
+
+    if (!isUnique) {
+      return res.status(500).json({
+        message: "Error generating unique referral code. Please try again.",
+      });
+    }
+
+    // Generate OTP
+    const otp = generateOTP();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Create new user
+    user = new User({
+      name,
+      email,
+      password: hashedPassword,
+      otp,
+      otpExpiry,
+      referralCode: userReferralCode,
+      referredBy: referrerData ? referrerData._id : null,
+    });
+
     await user.save();
 
-    // Send HTML email using the imported template function
+    // Send verification email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
       subject: "🔐 Verify Your AdsMoney Account",
       html: createVerificationEmailHTML(name, otp),
-      text: `Hi ${name}, Your AdsMoney verification code is: ${otp}. This code will expire in 2 minutes.`, // Fallback plain text
+      text: `Hi ${name}, Your AdsMoney verification code is: ${otp}. This code will expire in 10 minutes.`,
     });
 
     res.status(201).json({
       message:
         "User registered successfully! Please check your email for the verification code.",
       email: email,
+      referralCode: userReferralCode,
+      referredBy: referrerData ? referrerData.name : null,
     });
   } catch (error) {
     console.error("Error registering user:", error);
-    res
-      .status(500)
-      .json({ message: "Error registering user", error: error.message });
+    res.status(500).json({
+      message: "Error registering user",
+      error: error.message,
+    });
   }
 };
 
-// Verify OTP
+// Verify OTP with Referral Reward Processing
 exports.verifyOTP = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -74,17 +129,37 @@ exports.verifyOTP = async (req, res) => {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
+    // Mark user as verified
     user.isVerified = true;
     user.otp = undefined;
     user.otpExpiry = undefined;
     await user.save();
 
-    res.json({ message: "Email verified successfully. You can now log in." });
+    // Process referral reward if user was referred
+    let referralReward = null;
+    if (user.referredBy) {
+      const rewardResult = await processReferralReward(
+        user.referredBy,
+        user._id
+      );
+      if (rewardResult.success) {
+        referralReward = {
+          coinsEarned: rewardResult.coinsEarned,
+          referrerRewarded: true,
+        };
+      }
+    }
+
+    res.json({
+      message: "Email verified successfully. You can now log in.",
+      referralReward,
+    });
   } catch (error) {
     console.error("Error verifying OTP:", error);
-    res
-      .status(500)
-      .json({ message: "Error verifying OTP", error: error.message });
+    res.status(500).json({
+      message: "Error verifying OTP",
+      error: error.message,
+    });
   }
 };
 
@@ -100,24 +175,24 @@ exports.resendOTP = async (req, res) => {
 
     const otp = generateOTP();
     user.otp = otp;
-    user.otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // New OTP valid for 10 minutes
+    user.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    // Send resend email using the imported HTML template function
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
       subject: "🔄 Your New AdsMoney Verification Code",
       html: createResendOTPEmailHTML(user.name, otp),
-      text: `Hi ${user.name}, Your new AdsMoney verification code is: ${otp}. This code will expire in 10 minutes.`, // Fallback plain text
+      text: `Hi ${user.name}, Your new AdsMoney verification code is: ${otp}. This code will expire in 10 minutes.`,
     });
 
     res.json({ message: "OTP resent successfully." });
   } catch (error) {
     console.error("Error resending OTP:", error);
-    res
-      .status(500)
-      .json({ message: "Error resending OTP", error: error.message });
+    res.status(500).json({
+      message: "Error resending OTP",
+      error: error.message,
+    });
   }
 };
 
@@ -127,63 +202,83 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
 
-    if (!user) return res.status(400).json({ message: "Invalid credentials" }); // More generic message for security
+    if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
-    // Compare provided password with hashed password in DB
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" }); // More generic message for security
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
     if (!user.isVerified) {
-      return res
-        .status(400)
-        .json({ message: "Email not verified. Please verify OTP." });
+      return res.status(400).json({
+        message: "Email not verified. Please verify OTP.",
+      });
     }
 
-    // Generate JWT
     const payload = {
       user: {
-        id: user.id, // Mongoose uses 'id' for _id by default
+        id: user.id,
         email: user.email,
         name: user.name,
+        referralCode: user.referralCode,
       },
     };
 
     jwt.sign(
       payload,
-      process.env.JWT_SECRET, // Use environment variable for secret
-      { expiresIn: "1h" }, // Token expires in 1 hour
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" },
       (err, token) => {
         if (err) throw err;
-        res.json({ message: "Login successful", token }); // Send token in response
+        res.json({
+          message: "Login successful",
+          token,
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            referralCode: user.referralCode,
+            coins: user.coins || 0,
+            referralCount: user.referralCount || 0,
+          },
+        });
       }
     );
   } catch (error) {
     console.error("Error logging in:", error);
-    res.status(500).json({ message: "Error logging in", error: error.message });
+    res.status(500).json({
+      message: "Error logging in",
+      error: error.message,
+    });
   }
 };
 
-// Logout User (JWTs are stateless, so logout is client-side by deleting the token)
+// Logout User
 exports.logout = (req, res) => {
-  // For JWT, logout is typically handled on the client by deleting the token.
-  // This endpoint can be used for any server-side cleanup if necessary,
-  // but it doesn't invalidate the token itself.
   res.json({ message: "Logged out successfully" });
 };
 
 // Dashboard (Protected Route)
-// Dashboard (Protected Route)
 exports.dashboard = async (req, res) => {
   try {
-    // req.user is populated by the authMiddleware
+    const user = await User.findById(req.user.id)
+      .select("-password -otp -otpExpiry")
+      .populate("referralHistory.referredUser", "name email");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     res.json({
-      message: `Welcome to the dashboard, ${req.user.name || req.user.email}`,
+      message: `Welcome to the dashboard, ${user.name}`,
       user: {
-        id: req.user.id,
-        name: req.user.name,
-        email: req.user.email,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        referralCode: user.referralCode,
+        coins: user.coins || 0,
+        referralCount: user.referralCount || 0,
+        referralHistory: user.referralHistory || [],
       },
     });
   } catch (error) {
