@@ -19,8 +19,7 @@ router.get("/stats", authMiddleware, getReferralStats);
 router.get("/history", authMiddleware, validatePagination, getReferralHistory);
 router.get("/analytics", authMiddleware, getReferralAnalytics);
 
-// Public routes - simplified parameter syntax
-router.get("/verify/:code", validateReferralCode, verifyReferralCode);
+// 👇 New endpoint for users count (protected)
 router.get("/leaderboard", validatePagination, getReferralLeaderboard);
 
 // Health check route

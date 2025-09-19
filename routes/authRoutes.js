@@ -6,6 +6,7 @@ const {
   login,
   logout,
   dashboard,
+  getUserCounts,
 } = require("../controllers/authController");
 const authMiddleware = require("../middleware/authMiddleware");
 const {
@@ -29,6 +30,9 @@ router.post("/logout", logout);
 
 // Protected routes
 router.get("/dashboard", authMiddleware, dashboard);
+
+// ✅ Users count endpoint (protected)
+router.get("/users-count", authMiddleware, getUserCounts);
 
 router.get("/health", (req, res) => {
   res.json({

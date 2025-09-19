@@ -163,6 +163,32 @@ exports.verifyOTP = async (req, res) => {
   }
 };
 
+// 👇 Add this new controller
+exports.getUserCounts = async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    const verifiedUsers = await User.countDocuments({ isVerified: true });
+    const activeUsers = await User.countDocuments({ isActive: true });
+
+    res.json({
+      success: true,
+      message: "Users count retrieved successfully",
+      data: {
+        totalUsers,
+        verifiedUsers,
+        activeUsers,
+      },
+    });
+  } catch (error) {
+    console.error("Get users count error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve users count",
+      error: error.message,
+    });
+  }
+};
+
 // Resend OTP
 exports.resendOTP = async (req, res) => {
   try {

@@ -25,7 +25,7 @@ const corsOptions = {
       process.env.FRONTEND_URL,
       "http://localhost:3000",
       "http://localhost:3001",
-      "http://192.168.203.122:3000",
+      "http://192.168.85.122:3000",
     ].filter(Boolean);
 
     if (allowedOrigins.includes(origin)) {
