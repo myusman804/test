@@ -157,6 +157,9 @@ const validateLogin = [
 ];
 
 // OTP validation with enhanced security
+// Updated OTP validation in middleware/validation.js
+// Replace the existing validateOTP array with this:
+
 const validateOTP = [
   body("email")
     .isEmail()
@@ -169,12 +172,11 @@ const validateOTP = [
     .isNumeric()
     .withMessage("OTP must contain only numbers")
     .custom((value) => {
-      // Ensure OTP doesn't contain obvious patterns
-      const hasRepeatedDigits = /(\d)\1{2,}/.test(value);
-      const isSequential = /123456|654321|012345|543210/.test(value);
-      const isAllSame = /(\d)\1{5}/.test(value);
+      // Only reject obvious fake patterns, but allow natural repetition
+      const isAllSame = /^(\d)\1{5}$/.test(value); // All same digit (111111)
+      const isSimpleSequence = /^123456$|^654321$/.test(value); // Only basic sequences
 
-      if (hasRepeatedDigits || isSequential || isAllSame) {
+      if (isAllSame || isSimpleSequence) {
         throw new Error("Invalid OTP format");
       }
       return true;

@@ -40,7 +40,7 @@ console.log("🔗 Setting up authentication routes...");
 // User registration
 router.post(
   "/register",
-  authLimiter, // Rate limiting for auth operations
+  // authLimiter, // Rate limiting for auth operations
   validateRegistration,
   register
 );

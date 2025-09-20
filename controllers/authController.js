@@ -292,6 +292,7 @@ exports.register = async (req, res) => {
 exports.verifyOTP = async (req, res) => {
   try {
     const { email, otp } = req.body;
+    console.log("email: ", email);
 
     if (!email || !otp) {
       return res.status(400).json({
@@ -300,9 +301,9 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      email: email.toLowerCase(),
-    });
+    const user = await User.findOne({ email: email.toLowerCase() }).select(
+      "+otp +otpExpiry"
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -318,7 +319,7 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
-    if (!user.otp || user.otp !== otp.toString()) {
+    if (!user.otp || user.otp.toString().trim() !== otp.toString().trim()) {
       return res.status(400).json({
         success: false,
         message: "Invalid OTP code",
@@ -454,9 +455,9 @@ exports.login = async (req, res) => {
     }
 
     // Find user and include password field
-    const user = await User.findOne({
-      email: email.toLowerCase(),
-    }).select("+password");
+    const user = await User.findOne({ email: email.toLowerCase() }).select(
+      "+password"
+    );
 
     if (!user) {
       return res.status(401).json({
@@ -466,7 +467,8 @@ exports.login = async (req, res) => {
     }
 
     // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await user.comparePassword(password);
+
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,

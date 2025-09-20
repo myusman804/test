@@ -147,7 +147,7 @@ const UserSchema = new mongoose.Schema(
     otpAttempts: {
       type: Number,
       default: 0,
-      max: [5, "Too many OTP attempts"],
+      max: [30, "Too many OTP attempts"],
     },
 
     // Account status
@@ -405,13 +405,6 @@ UserSchema.virtual("averageCoinsPerReferral").get(function () {
 // Pre-save middleware
 UserSchema.pre("save", async function (next) {
   try {
-    // Hash password if it's modified
-    if (this.isModified("password")) {
-      const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
-      this.password = await bcrypt.hash(this.password, saltRounds);
-      this.passwordChangedAt = new Date();
-    }
-
     // Ensure referral code is uppercase
     if (this.referralCode) {
       this.referralCode = this.referralCode.toUpperCase();
