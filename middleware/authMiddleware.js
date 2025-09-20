@@ -34,8 +34,13 @@ module.exports = (req, res, next) => {
       });
     }
 
-    // Attach user from token payload to request object
-    req.user = decoded.user;
+    req.user = {
+      id: decoded.user.id,
+      email: decoded.user.email,
+      name: decoded.user.name,
+      referralCode: decoded.user.referralCode,
+      is_admin: decoded.user.is_admin || false, // Extract admin status from token
+    };
 
     req.authTime = new Date();
 

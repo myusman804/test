@@ -43,11 +43,16 @@ app.use(express.json({ limit: "10mb" })); // Body parser with size limit
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 const authRoutes = require("./routes/authRoutes");
+// const imageRoutes = require("./routes/imageRoutes");
 const referralRoutes = require("./routes/referralRoutes");
 
 console.log("[v0] Registering auth routes...");
 app.use("/api/auth", authRoutes);
 console.log("[v0] Auth routes registered at /api/auth");
+
+// console.log("[v0] Registering image routes...");
+// app.use("/api/images", imageRoutes);
+// console.log("[v0] Image routes registered at /api/images");
 
 console.log("[v0] Registering referral routes...");
 app.use("/api/referral", referralRoutes);

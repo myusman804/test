@@ -10,6 +10,10 @@ const {
 } = require("../controllers/authController");
 const authMiddleware = require("../middleware/authMiddleware");
 const {
+  requireAdmin,
+  checkAdminStatus,
+} = require("../middleware/adminMiddleware");
+const {
   validateRegistration,
   validateLogin,
   validateOTP,
@@ -29,10 +33,24 @@ router.post("/login", validateLogin, login);
 router.post("/logout", logout);
 
 // Protected routes
-router.get("/dashboard", authMiddleware, dashboard);
+router.get("/dashboard", authMiddleware, checkAdminStatus, dashboard);
 
-// ✅ Users count endpoint (protected)
-router.get("/users-count", authMiddleware, getUserCounts);
+router.get("/users-count", authMiddleware, requireAdmin, getUserCounts);
+
+router.get("/verify-admin", authMiddleware, (req, res) => {
+  res.json({
+    success: true,
+    message: "Admin status verified",
+    data: {
+      isAdmin: req.user.is_admin || false,
+      adminConfirmed: req.user.adminConfirmed || false,
+      user: {
+        name: req.user.name,
+        email: req.user.email,
+      },
+    },
+  });
+});
 
 router.get("/health", (req, res) => {
   res.json({
