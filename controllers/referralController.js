@@ -6,7 +6,7 @@ const {
 } = require("../utils/referralUtils");
 
 // Get referral stats for authenticated user
-exports.getReferralStats = async (req, res) => {
+const getReferralStats = async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -53,7 +53,7 @@ exports.getReferralStats = async (req, res) => {
 };
 
 // Verify referral code
-exports.verifyReferralCode = async (req, res) => {
+const verifyReferralCode = async (req, res) => {
   try {
     const { code } = req.params;
 
@@ -103,7 +103,7 @@ exports.verifyReferralCode = async (req, res) => {
 };
 
 // Get referral leaderboard
-exports.getReferralLeaderboard = async (req, res) => {
+const getReferralLeaderboard = async (req, res) => {
   try {
     const { limit = 10, page = 1 } = req.query;
     const parsedLimit = Math.min(parseInt(limit), 50); // Max 50 results
@@ -180,7 +180,7 @@ exports.getReferralLeaderboard = async (req, res) => {
 };
 
 // Get referral history for authenticated user
-exports.getReferralHistory = async (req, res) => {
+const getReferralHistory = async (req, res) => {
   try {
     const userId = req.user.id;
     const {
@@ -323,7 +323,7 @@ exports.getReferralHistory = async (req, res) => {
 };
 
 // Get referral analytics for authenticated user
-exports.getReferralAnalytics = async (req, res) => {
+const getReferralAnalytics = async (req, res) => {
   try {
     const userId = req.user.id;
     const { period = "30" } = req.query;

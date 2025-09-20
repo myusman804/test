@@ -20,8 +20,8 @@ const REFERRAL_REWARD_COINS = parseInt(process.env.REFERRAL_REWARD_COINS) || 10;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 
 // Email Transporter Setup with better configuration
-const createTransporter = () => {
-  const transporter = nodemailer.createTransporter({
+const createEmailTransporter = () => {
+  const transporter = nodemailer.createTransport({
     service: process.env.EMAIL_SERVICE || "gmail",
     auth: {
       user: process.env.EMAIL_USER,
@@ -46,7 +46,7 @@ const createTransporter = () => {
   return transporter;
 };
 
-const transporter = createTransport();
+const transporter = createEmailTransporter();
 
 // Generate secure OTP
 const generateOTP = () => {

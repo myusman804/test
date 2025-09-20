@@ -26,6 +26,7 @@ const {
   adminLimiter,
   sensitiveLimiter,
 } = require("../middleware/rateLimiter");
+const { validateResendOTP } = require("../middleware/validation2");
 
 const router = express.Router();
 
@@ -58,7 +59,7 @@ console.log("✅ POST /verify-otp route registered");
 router.post(
   "/resend-otp",
   otpLimiter, // Same strict rate limiting
-  validateOTP, // Reuse OTP validation (only email required)
+  validateResendOTP, // Reuse OTP validation (only email required)
   resendOTP
 );
 console.log("✅ POST /resend-otp route registered");

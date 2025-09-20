@@ -7,7 +7,7 @@ const { connectDB, checkDBHealth } = require("./config/db");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
 const { generalLimiter } = require("./middleware/rateLimiter");
 
-// Load environment variables
+// Load environment variables first
 require("dotenv").config();
 
 // Validate required environment variables
@@ -289,6 +289,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`⚡ Process ID: ${process.pid}`);
   console.log(`🕒 Started at: ${new Date().toISOString()}`);
   console.log("==========================================\n");
+  console.log(`🕒 Connected successfully`);
 });
 
 // Graceful shutdown handlers
