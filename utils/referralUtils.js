@@ -3,16 +3,26 @@ const User = require("../models/User");
 
 const generateReferralCode = (name, email) => {
   try {
+    // Ensure inputs are valid
+    if (!name || !email) {
+      throw new Error(
+        "Name and email are required for referral code generation"
+      );
+    }
+
     const timestamp = Date.now().toString();
     const randomStr = crypto.randomBytes(3).toString("hex").toUpperCase();
-    const namePrefix = name
-      .substring(0, 2)
-      .toUpperCase()
-      .replace(/[^A-Z]/g, "X");
-    const emailPrefix = email.substring(0, 1).toUpperCase();
+
+    // Clean and prepare name prefix
+    const cleanName = name.replace(/[^A-Za-z]/g, "").toUpperCase();
+    const namePrefix = cleanName.length >= 2 ? cleanName.substring(0, 2) : "XX";
+
+    // Get email prefix
+    const emailPrefix = email.charAt(0).toUpperCase();
 
     return `${namePrefix}${emailPrefix}${randomStr}${timestamp.slice(-3)}`;
   } catch (error) {
+    console.error("Error generating referral code:", error);
     // Fallback generation method
     const fallbackCode = crypto.randomBytes(6).toString("hex").toUpperCase();
     return `REF${fallbackCode}`;
@@ -40,7 +50,11 @@ const verifyReferralCode = async (referralCode) => {
       return { valid: false, message: "Invalid or inactive referral code" };
     }
 
-    return { valid: true, referrer, message: "Valid referral code" };
+    return {
+      valid: true,
+      referrer,
+      message: `Valid referral code from ${referrer.name}`,
+    };
   } catch (error) {
     console.error("Error verifying referral code:", error);
     return { valid: false, message: "Error verifying referral code" };
@@ -48,10 +62,14 @@ const verifyReferralCode = async (referralCode) => {
 };
 
 const processReferralReward = async (referrerId, newUserId) => {
+  if (!referrerId || !newUserId) {
+    throw new Error("Both referrer ID and new user ID are required");
+  }
+
   const session = await User.db.startSession();
 
   try {
-    await session.withTransaction(async () => {
+    const result = await session.withTransaction(async () => {
       // Get both users within transaction
       const referrer = await User.findById(referrerId).session(session);
       const newUser = await User.findById(newUserId).session(session);
@@ -60,14 +78,29 @@ const processReferralReward = async (referrerId, newUserId) => {
         throw new Error("User not found during referral processing");
       }
 
+      if (!referrer.isVerified || !referrer.isActive) {
+        throw new Error("Referrer is not active or verified");
+      }
+
       if (!newUser.isVerified) {
         throw new Error(
           "New user must be verified before processing referral reward"
         );
       }
 
+      // Check if referral reward has already been processed
+      const existingReferral = referrer.referralHistory.find(
+        (ref) => ref.referredUser.toString() === newUserId.toString()
+      );
+
+      if (existingReferral) {
+        console.log("Referral reward already processed for this user");
+        return { success: true, coinsEarned: 0, alreadyProcessed: true };
+      }
+
       const REFERRAL_REWARD = 10;
 
+      // Update referrer
       await User.findByIdAndUpdate(
         referrerId,
         {
@@ -91,9 +124,11 @@ const processReferralReward = async (referrerId, newUserId) => {
       console.log(
         `✅ Referral reward processed: ${REFERRAL_REWARD} coins to user ${referrerId}`
       );
+
+      return { success: true, coinsEarned: REFERRAL_REWARD };
     });
 
-    return { success: true, coinsEarned: 10 };
+    return result;
   } catch (error) {
     console.error("Error processing referral reward:", error);
     return { success: false, error: error.message };
@@ -104,6 +139,10 @@ const processReferralReward = async (referrerId, newUserId) => {
 
 const getReferralStats = async (userId) => {
   try {
+    if (!userId) {
+      return { success: false, message: "User ID is required" };
+    }
+
     const user = await User.findById(userId)
       .select("referralCode referralCount coins referralHistory name")
       .populate({
@@ -120,6 +159,7 @@ const getReferralStats = async (userId) => {
       (sum, ref) => sum + (ref.coinsEarned || 0),
       0
     );
+
     const recentReferrals = user.referralHistory.filter((ref) => {
       const referralDate = new Date(ref.referredAt);
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -137,6 +177,10 @@ const getReferralStats = async (userId) => {
         process.env.FRONTEND_URL || "http://localhost:3000"
       }/register?ref=${user.referralCode}`,
       userName: user.name,
+      averageCoinsPerReferral:
+        user.referralCount > 0
+          ? (totalCoinsFromReferrals / user.referralCount).toFixed(2)
+          : 0,
     };
 
     return { success: true, stats };
@@ -148,11 +192,61 @@ const getReferralStats = async (userId) => {
 
 const canUserRefer = async (userId) => {
   try {
+    if (!userId) {
+      return false;
+    }
+
     const user = await User.findById(userId).select("isVerified isActive");
     return user && user.isVerified && user.isActive;
   } catch (error) {
     console.error("Error checking user referral eligibility:", error);
     return false;
+  }
+};
+
+const getReferralLeaderboard = async (limit = 10, page = 1) => {
+  try {
+    const skip = (page - 1) * limit;
+
+    const topReferrers = await User.find({
+      isVerified: true,
+      isActive: true,
+      referralCount: { $gt: 0 },
+    })
+      .select("name referralCode referralCount coins createdAt")
+      .sort({ referralCount: -1, coins: -1, createdAt: 1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean();
+
+    const totalCount = await User.countDocuments({
+      isVerified: true,
+      isActive: true,
+      referralCount: { $gt: 0 },
+    });
+
+    const leaderboard = topReferrers.map((user, index) => ({
+      rank: skip + index + 1,
+      name: user.name,
+      referralCode: user.referralCode,
+      totalReferrals: user.referralCount,
+      totalCoins: user.coins,
+      memberSince: user.createdAt,
+    }));
+
+    return {
+      success: true,
+      leaderboard,
+      pagination: {
+        currentPage: Number(page),
+        totalPages: Math.ceil(totalCount / limit),
+        totalUsers: totalCount,
+        hasMore: skip + topReferrers.length < totalCount,
+      },
+    };
+  } catch (error) {
+    console.error("Error getting referral leaderboard:", error);
+    return { success: false, error: error.message };
   }
 };
 
@@ -162,4 +256,5 @@ module.exports = {
   processReferralReward,
   getReferralStats,
   canUserRefer,
+  getReferralLeaderboard,
 };
