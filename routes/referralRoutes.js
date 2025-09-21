@@ -54,8 +54,8 @@ router.get("/info", docsLimiter, (req, res) => {
     message: "Referral program information",
     data: {
       program: {
-        name: "AdsMoney Referral Program",
-        description: "Earn coins by referring friends to AdsMoney",
+        name: "Party-Support Referral Program",
+        description: "Earn coins by referring friends to Party-Support",
         version: "2.0.0",
       },
       rewards: {
@@ -90,7 +90,7 @@ router.get("/info", docsLimiter, (req, res) => {
       ],
       tips: [
         "Share on social media for maximum reach",
-        "Explain the benefits of AdsMoney to friends",
+        "Explain the benefits of Party-Support to friends",
         "Follow up to help friends complete verification",
         "Quality referrals work better than quantity",
         "Check your analytics to optimize your strategy",
@@ -138,7 +138,7 @@ router.get("/link", authMiddleware, (req, res) => {
       data: {
         referralCode: req.user.referralCode,
         referralLink,
-        shareableMessage: `Join me on AdsMoney and start earning! Use my referral code: ${req.user.referralCode}`,
+        shareableMessage: `Join me on Party-Support and start earning! Use my referral code: ${req.user.referralCode}`,
         socialShareUrls: {
           facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
             referralLink
@@ -146,13 +146,13 @@ router.get("/link", authMiddleware, (req, res) => {
           twitter: `https://twitter.com/intent/tweet?url=${encodeURIComponent(
             referralLink
           )}&text=${encodeURIComponent(
-            `Join me on AdsMoney! Use code: ${req.user.referralCode}`
+            `Join me on Party-Support! Use code: ${req.user.referralCode}`
           )}`,
           linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(
             referralLink
           )}`,
           whatsapp: `https://wa.me/?text=${encodeURIComponent(
-            `Join me on AdsMoney and start earning! ${referralLink}`
+            `Join me on Party-Support and start earning! ${referralLink}`
           )}`,
         },
         qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(

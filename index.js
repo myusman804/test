@@ -134,7 +134,7 @@ app.get("/health", async (req, res) => {
 
     const healthData = {
       success: true,
-      message: "AdsMoney API is running smoothly",
+      message: "Party-Support API is running smoothly",
       version: "2.0.0",
       timestamp,
       uptime: {
@@ -171,7 +171,7 @@ app.get("/health", async (req, res) => {
 app.get("/api", (req, res) => {
   res.json({
     success: true,
-    message: "AdsMoney API v2.0.0",
+    message: "Party-Support API v2.0.0",
     documentation: {
       version: "2.0.0",
       lastUpdated: "2025-01-21",
@@ -281,7 +281,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 
 // Start server
 const server = app.listen(PORT, HOST, () => {
-  console.log("\n🚀 ===== AdsMoney API Server Started =====");
+  console.log("\n🚀 ===== Party-Support API Server Started =====");
   console.log(`📡 Server: http://${HOST}:${PORT}`);
   console.log(`📱 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`📚 API Docs: http://${HOST}:${PORT}/api`);

@@ -230,11 +230,11 @@ exports.register = async (req, res) => {
     // Send verification email
     const mailOptions = {
       from: {
-        name: process.env.EMAIL_FROM_NAME || "AdsMoney",
+        name: process.env.EMAIL_FROM_NAME || "Party-Support",
         address: process.env.EMAIL_USER,
       },
       to: email,
-      subject: "🔐 Verify Your Email - AdsMoney",
+      subject: "🔐 Verify Your Email - Party-Support",
       html: createVerificationEmailHTML(name.trim(), otp),
     };
 
@@ -414,11 +414,11 @@ exports.resendOTP = async (req, res) => {
     // Send new OTP email
     const mailOptions = {
       from: {
-        name: process.env.EMAIL_FROM_NAME || "AdsMoney",
+        name: process.env.EMAIL_FROM_NAME || "Party-Support",
         address: process.env.EMAIL_USER,
       },
       to: email,
-      subject: "🔄 New Verification Code - AdsMoney",
+      subject: "🔄 New Verification Code - Party-Support",
       html: createResendOTPEmailHTML(user.name, otp),
     };
 

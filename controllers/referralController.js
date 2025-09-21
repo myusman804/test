@@ -37,7 +37,7 @@ const getReferralStats = async (req, res) => {
         canRefer: true,
         referralTips: [
           "Share your referral link on social media",
-          "Tell friends about AdsMoney benefits",
+          "Tell friends about Party-Support benefits",
           "Each successful referral earns you coins",
         ],
       },
