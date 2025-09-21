@@ -298,20 +298,18 @@ const UserSchema = new mongoose.Schema(
 
     // Analytics and tracking
     stats: {
-      profileViews: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-      loginCount: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-      lastActivity: {
-        type: Date,
-        default: Date.now,
-      },
+      profileViews: { type: Number, default: 0, min: 0 },
+      loginCount: { type: Number, default: 0, min: 0 },
+      lastActivity: { type: Date, default: Date.now },
+      // Add these new social media fields:
+      imagesUploaded: { type: Number, default: 0, min: 0 },
+      totalUploads: { type: Number, default: 0, min: 0 },
+      followerCount: { type: Number, default: 0, min: 0 },
+      followingCount: { type: Number, default: 0, min: 0 },
+      totalLikes: { type: Number, default: 0, min: 0 },
+      totalComments: { type: Number, default: 0, min: 0 },
+      postsLiked: { type: Number, default: 0, min: 0 },
+      commentsPosted: { type: Number, default: 0, min: 0 },
     },
 
     // Verification tokens
@@ -384,6 +382,11 @@ UserSchema.virtual("isAccountLocked").get(function () {
   return !!(this.accountLockUntil && this.accountLockUntil > Date.now());
 });
 
+UserSchema.methods.isFollowing = async function (userId) {
+  const Follow = require("./Follow");
+  return await Follow.isFollowing(this._id, userId);
+};
+
 UserSchema.virtual("membershipDuration").get(function () {
   return Math.floor(
     (Date.now() - this.createdAt.getTime()) / (1000 * 60 * 60 * 24)
@@ -454,156 +457,203 @@ UserSchema.methods.comparePassword = async function (candidatePassword) {
   }
 };
 
-UserSchema.methods.recordLoginAttempt = function (
-  ip,
-  userAgent,
-  success = false
-) {
-  const attempt = {
-    ip,
-    userAgent,
-    success,
-    timestamp: new Date(),
-  };
+UserSchema.methods.getSocialStats = async function () {
+  const Follow = require("./Follow");
+  const Image = require("./Image");
 
-  this.loginAttempts.unshift(attempt);
-
-  // Keep only last 10 attempts
-  if (this.loginAttempts.length > 10) {
-    this.loginAttempts = this.loginAttempts.slice(0, 10);
-  }
-
-  if (success) {
-    this.lastLogin = new Date();
-    this.lastLoginIP = ip;
-    this.stats.loginCount += 1;
-    this.stats.lastActivity = new Date();
-
-    // Reset failed attempts on successful login
-    this.accountLockUntil = undefined;
-  } else {
-    // Check for too many failed attempts
-    const recentFailedAttempts = this.loginAttempts.filter(
-      (attempt) =>
-        !attempt.success &&
-        Date.now() - attempt.timestamp.getTime() < 15 * 60 * 1000 // 15 minutes
-    ).length;
-
-    if (recentFailedAttempts >= 5) {
-      this.accountLockUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes lock
-    }
-  }
-};
-
-UserSchema.methods.addReferral = function (referredUser, coinsEarned = 10) {
-  const referral = {
-    referredUser: referredUser._id,
-    referredUserName: referredUser.name,
-    referredUserEmail: referredUser.email,
-    coinsEarned,
-    referredAt: new Date(),
-    status: "pending",
-  };
-
-  this.referralHistory.unshift(referral);
-  this.referralCount += 1;
-  this.coins += coinsEarned;
-  this.totalEarned += coinsEarned;
-
-  return referral;
-};
-
-UserSchema.methods.updateReferralStatus = function (referredUserId, status) {
-  const referral = this.referralHistory.find(
-    (ref) => ref.referredUser.toString() === referredUserId.toString()
-  );
-
-  if (referral) {
-    referral.status = status;
-    if (status === "verified") {
-      this.successfulReferrals += 1;
-    }
-    return referral;
-  }
-
-  return null;
-};
-
-UserSchema.methods.canRefer = function () {
-  return this.isVerified && this.isActive && !this.isAccountLocked;
-};
-
-UserSchema.methods.softDelete = function (deletedBy = null) {
-  this.deletedAt = new Date();
-  this.deletedBy = deletedBy;
-  this.isActive = false;
-  return this.save();
-};
-
-UserSchema.methods.restore = function () {
-  this.deletedAt = null;
-  this.deletedBy = null;
-  this.isActive = true;
-  return this.save();
-};
-
-// Static methods
-UserSchema.statics.findActive = function () {
-  return this.find({ isActive: true, deletedAt: null });
-};
-
-UserSchema.statics.findByReferralCode = function (code) {
-  return this.findOne({
-    referralCode: code.toUpperCase(),
-    isActive: true,
-    isVerified: true,
-    deletedAt: null,
-  });
-};
-
-UserSchema.statics.getLeaderboard = function (limit = 10) {
-  return this.find({
-    isVerified: true,
-    isActive: true,
-    referralCount: { $gt: 0 },
-    deletedAt: null,
-  })
-    .select("name referralCode referralCount coins createdAt")
-    .sort({ referralCount: -1, coins: -1, createdAt: 1 })
-    .limit(limit)
-    .lean();
-};
-
-UserSchema.statics.getUserStats = async function () {
-  const [stats] = await this.aggregate([
-    {
-      $match: { deletedAt: null },
-    },
-    {
-      $group: {
-        _id: null,
-        totalUsers: { $sum: 1 },
-        verifiedUsers: { $sum: { $cond: ["$isVerified", 1, 0] } },
-        activeUsers: { $sum: { $cond: ["$isActive", 1, 0] } },
-        totalReferrals: { $sum: "$referralCount" },
-        totalCoins: { $sum: "$coins" },
-        avgReferralsPerUser: { $avg: "$referralCount" },
-        avgCoinsPerUser: { $avg: "$coins" },
+  const [followStats, imageStats] = await Promise.all([
+    Follow.getFollowStats(this._id),
+    Image.aggregate([
+      { $match: { createdBy: this._id, deletedAt: null } },
+      {
+        $group: {
+          _id: null,
+          totalImages: { $sum: 1 },
+          totalLikes: { $sum: "$likeCount" },
+          totalComments: { $sum: "$commentCount" },
+          totalViews: { $sum: "$views" },
+        },
       },
-    },
+    ]),
   ]);
 
-  return (
-    stats || {
-      totalUsers: 0,
-      verifiedUsers: 0,
-      activeUsers: 0,
-      totalReferrals: 0,
-      totalCoins: 0,
-      avgReferralsPerUser: 0,
-      avgCoinsPerUser: 0,
+  UserSchema.methods.recordLoginAttempt = function (
+    ip,
+    userAgent,
+    success = false
+  ) {
+    const attempt = {
+      ip,
+      userAgent,
+      success,
+      timestamp: new Date(),
+    };
+
+    this.loginAttempts.unshift(attempt);
+
+    // Keep only last 10 attempts
+    if (this.loginAttempts.length > 10) {
+      this.loginAttempts = this.loginAttempts.slice(0, 10);
     }
-  );
+
+    if (success) {
+      this.lastLogin = new Date();
+      this.lastLoginIP = ip;
+      this.stats.loginCount += 1;
+      this.stats.lastActivity = new Date();
+
+      // Reset failed attempts on successful login
+      this.accountLockUntil = undefined;
+    } else {
+      // Check for too many failed attempts
+      const recentFailedAttempts = this.loginAttempts.filter(
+        (attempt) =>
+          !attempt.success &&
+          Date.now() - attempt.timestamp.getTime() < 15 * 60 * 1000 // 15 minutes
+      ).length;
+
+      if (recentFailedAttempts >= 5) {
+        this.accountLockUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes lock
+      }
+    }
+  };
+
+  UserSchema.methods.addReferral = function (referredUser, coinsEarned = 10) {
+    const referral = {
+      referredUser: referredUser._id,
+      referredUserName: referredUser.name,
+      referredUserEmail: referredUser.email,
+      coinsEarned,
+      referredAt: new Date(),
+      status: "pending",
+    };
+
+    this.referralHistory.unshift(referral);
+    this.referralCount += 1;
+    this.coins += coinsEarned;
+    this.totalEarned += coinsEarned;
+
+    return referral;
+  };
+
+  UserSchema.methods.updateReferralStatus = function (referredUserId, status) {
+    const referral = this.referralHistory.find(
+      (ref) => ref.referredUser.toString() === referredUserId.toString()
+    );
+
+    if (referral) {
+      referral.status = status;
+      if (status === "verified") {
+        this.successfulReferrals += 1;
+      }
+      return referral;
+    }
+
+    return null;
+  };
+
+  UserSchema.methods.canRefer = function () {
+    return this.isVerified && this.isActive && !this.isAccountLocked;
+  };
+
+  UserSchema.methods.softDelete = function (deletedBy = null) {
+    this.deletedAt = new Date();
+    this.deletedBy = deletedBy;
+    this.isActive = false;
+    return this.save();
+  };
+
+  UserSchema.methods.restore = function () {
+    this.deletedAt = null;
+    this.deletedBy = null;
+    this.isActive = true;
+    return this.save();
+  };
+
+  // Static methods
+  UserSchema.statics.findActive = function () {
+    return this.find({ isActive: true, deletedAt: null });
+  };
+
+  UserSchema.statics.findByReferralCode = function (code) {
+    return this.findOne({
+      referralCode: code.toUpperCase(),
+      isActive: true,
+      isVerified: true,
+      deletedAt: null,
+    });
+  };
+
+  UserSchema.statics.getLeaderboard = function (limit = 10) {
+    return this.find({
+      isVerified: true,
+      isActive: true,
+      referralCount: { $gt: 0 },
+      deletedAt: null,
+    })
+      .select("name referralCode referralCount coins createdAt")
+      .sort({ referralCount: -1, coins: -1, createdAt: 1 })
+      .limit(limit)
+      .lean();
+  };
+
+  UserSchema.statics.getUserStats = async function () {
+    const [stats] = await this.aggregate([
+      {
+        $match: { deletedAt: null },
+      },
+      {
+        $group: {
+          _id: null,
+          totalUsers: { $sum: 1 },
+          verifiedUsers: { $sum: { $cond: ["$isVerified", 1, 0] } },
+          activeUsers: { $sum: { $cond: ["$isActive", 1, 0] } },
+          totalReferrals: { $sum: "$referralCount" },
+          totalCoins: { $sum: "$coins" },
+          avgReferralsPerUser: { $avg: "$referralCount" },
+          avgCoinsPerUser: { $avg: "$coins" },
+        },
+      },
+    ]);
+
+    return (
+      stats || {
+        totalUsers: 0,
+        verifiedUsers: 0,
+        activeUsers: 0,
+        totalReferrals: 0,
+        totalCoins: 0,
+        avgReferralsPerUser: 0,
+        avgCoinsPerUser: 0,
+      }
+    );
+  };
+
+  const imageData = imageStats[0] || {
+    totalImages: 0,
+    totalLikes: 0,
+    totalComments: 0,
+    totalViews: 0,
+  };
+
+  return {
+    followers: followStats.followers,
+    following: followStats.following,
+    mutualFollows: followStats.mutualFollows,
+    followRatio: followStats.ratio,
+    images: imageData.totalImages,
+    likesReceived: imageData.totalLikes,
+    commentsReceived: imageData.totalComments,
+    views: imageData.totalViews,
+    engagementRate:
+      imageData.totalViews > 0
+        ? (
+            ((imageData.totalLikes + imageData.totalComments) /
+              imageData.totalViews) *
+            100
+          ).toFixed(2)
+        : 0,
+  };
 };
 
 // Query middleware

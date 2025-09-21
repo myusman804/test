@@ -113,18 +113,22 @@ app.use(
 connectDB();
 
 // Import routes
+const imageRoutes = require("./routes/imageRoutes");
+const socialRoutes = require("./routes/socialRoutes");
 const authRoutes = require("./routes/authRoutes");
 const referralRoutes = require("./routes/referralRoutes");
 
 // API Routes
 console.log("🔗 Registering API routes...");
+app.use("/api/images", imageRoutes);
+app.use("/api/social", socialRoutes);
 
 app.use("/api/auth", authRoutes);
 console.log("✅ Auth routes registered at /api/auth");
 
 app.use("/api/referral", referralRoutes);
 console.log("✅ Referral routes registered at /api/referral");
-
+app.use("/uploads", express.static("uploads"));
 // Health check endpoint
 app.get("/health", async (req, res) => {
   try {
