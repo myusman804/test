@@ -62,7 +62,7 @@ router.get("/user/my-images", authMiddleware, generalLimiter, getUserImages);
 console.log("✅ GET /user/my-images route registered");
 
 // Like/Unlike image
-router.post("/:imageId/like", authMiddleware, generalLimiter, toggleLike);
+router.post("/:imageId/like", generalLimiter, toggleLike);
 console.log("✅ POST /:imageId/like route registered");
 
 // Add comment to image

@@ -648,12 +648,15 @@ const toggleLike = async (req, res) => {
         $inc: { "stats.postsLiked": -1 },
       });
 
+      // refresh the image after update
+      const updatedImage = await Image.findById(imageId);
+
       res.json({
         success: true,
         message: "Image unliked successfully",
         data: {
           action: "unliked",
-          likeCount: image.likeCount,
+          likeCount: image.likes.length,
           isLiked: false,
         },
       });
@@ -664,12 +667,14 @@ const toggleLike = async (req, res) => {
         $inc: { "stats.postsLiked": 1 },
       });
 
+      const updatedImage = await Image.findById(imageId);
+
       res.json({
         success: true,
         message: "Image liked successfully",
         data: {
           action: "liked",
-          likeCount: image.likeCount,
+          likeCount: image.likes.length, // ✅ always a number
           isLiked: true,
         },
       });
