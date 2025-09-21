@@ -190,9 +190,17 @@ const uploadMiddleware = (req, res, next) => {
 };
 
 // Main upload controller - Updated with your requirements
+
 const uploadImages = async (req, res) => {
   try {
+    console.log("🔧 Upload request received");
+    console.log("🔧 Files:", req.files ? req.files.length : "No files");
+    console.log("🔧 Body:", req.body);
+    console.log("🔧 User:", req.user ? req.user.id : "No user");
+
+    // Check if files exist
     if (!req.files || req.files.length === 0) {
+      console.log("❌ No files in request");
       return res.status(400).json({
         success: false,
         message: "No images were uploaded. Please select at least one image.",
@@ -203,12 +211,27 @@ const uploadImages = async (req, res) => {
     // Get content from request body
     const { content = "", category = "general", tags = [] } = req.body;
 
+    console.log("📝 Request data:", {
+      content: content.substring(0, 50),
+      category,
+      tags: typeof tags === "string" ? JSON.parse(tags) : tags,
+      filesCount: req.files.length,
+    });
+
     const uploadResults = [];
     const errors = [];
 
     // Process each uploaded file
     for (const file of req.files) {
       try {
+        console.log("📁 Processing file:", {
+          filename: file.filename,
+          originalname: file.originalname,
+          size: file.size,
+          mimetype: file.mimetype,
+          path: file.path,
+        });
+
         const originalPath = file.path;
         const filename = file.filename;
         const nameWithoutExt = path.parse(filename).name;
@@ -224,18 +247,28 @@ const uploadImages = async (req, res) => {
           thumbnailFilename
         );
 
+        console.log("🔄 Processing paths:", {
+          original: originalPath,
+          processed: processedPath,
+          thumbnail: thumbnailPath,
+        });
+
         // Process main image
         const processResult = await processImage(originalPath, processedPath, {
           quality: 85,
           format: "jpeg",
         });
 
+        console.log("✅ Image processed successfully");
+
         // Generate thumbnail
         await generateThumbnail(processedPath, thumbnailPath);
+        console.log("✅ Thumbnail generated");
 
         // Delete original unprocessed file
         try {
           await fs.unlink(originalPath);
+          console.log("🗑️ Original file cleaned up");
         } catch (unlinkError) {
           console.warn("Warning: Could not delete original file:", unlinkError);
         }
@@ -247,6 +280,25 @@ const uploadImages = async (req, res) => {
         const baseUrl = `${req.protocol}://${req.get("host")}`;
         const imageUrl = `${baseUrl}/uploads/images/${processedFilename}`;
         const thumbnailUrl = `${baseUrl}/uploads/thumbnails/${thumbnailFilename}`;
+
+        // Prepare tags array
+        let tagsArray = [];
+        if (tags) {
+          if (typeof tags === "string") {
+            try {
+              tagsArray = JSON.parse(tags);
+            } catch (e) {
+              tagsArray = tags
+                .split(",")
+                .map((tag) => tag.trim())
+                .filter(Boolean);
+            }
+          } else if (Array.isArray(tags)) {
+            tagsArray = tags;
+          }
+        }
+
+        console.log("💾 Creating database record...");
 
         // Create image record in database
         const imageData = new Image({
@@ -267,12 +319,11 @@ const uploadImages = async (req, res) => {
           compressionRatio:
             (((file.size - stats.size) / file.size) * 100).toFixed(2) + "%",
           category,
-          tags: Array.isArray(tags)
-            ? tags
-            : tags.split(",").map((tag) => tag.trim()),
+          tags: tagsArray,
         });
 
         const savedImage = await imageData.save();
+        console.log("✅ Database record created:", savedImage._id);
 
         const result = {
           success: true,
@@ -305,9 +356,13 @@ const uploadImages = async (req, res) => {
         );
       } catch (fileError) {
         console.error(`❌ Error processing file ${file.filename}:`, fileError);
+        console.error("Stack trace:", fileError.stack);
 
+        // Clean up failed file
         try {
-          await fs.unlink(file.path);
+          if (file.path) {
+            await fs.unlink(file.path);
+          }
         } catch (cleanupError) {
           console.warn("Cleanup error:", cleanupError);
         }
@@ -328,6 +383,7 @@ const uploadImages = async (req, res) => {
         },
         "stats.lastActivity": new Date(),
       });
+      console.log("✅ User stats updated");
     } catch (statsError) {
       console.warn("Warning: Could not update user stats:", statsError);
     }
@@ -356,14 +412,38 @@ const uploadImages = async (req, res) => {
 
     const statusCode =
       uploadResults.length > 0 ? (errors.length > 0 ? 207 : 201) : 400;
+
+    console.log("🎉 Upload completed:", {
+      successful: uploadResults.length,
+      failed: errors.length,
+      statusCode,
+    });
+
     res.status(statusCode).json(response);
   } catch (error) {
     console.error("❌ Upload controller error:", error);
+    console.error("Stack trace:", error.stack);
 
+    // Enhanced error logging
+    console.error("Error details:", {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      request: {
+        files: req.files ? req.files.length : 0,
+        body: Object.keys(req.body),
+        user: req.user ? req.user.id : "none",
+      },
+    });
+
+    // Clean up any uploaded files on error
     if (req.files) {
       req.files.forEach(async (file) => {
         try {
-          await fs.unlink(file.path);
+          if (file.path) {
+            await fs.unlink(file.path);
+            console.log("🧹 Cleaned up file:", file.path);
+          }
         } catch (cleanupError) {
           console.warn("Cleanup error:", cleanupError);
         }
@@ -374,7 +454,14 @@ const uploadImages = async (req, res) => {
       success: false,
       message: "Internal server error during image upload",
       code: "INTERNAL_ERROR",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      error:
+        process.env.NODE_ENV === "development"
+          ? {
+              message: error.message,
+              name: error.name,
+              stack: error.stack?.substring(0, 500),
+            }
+          : undefined,
       timestamp: new Date().toISOString(),
     });
   }
