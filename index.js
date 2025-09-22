@@ -85,22 +85,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Body parsing middleware with size limits
-app.use(
-  express.json({
-    limit: "10mb",
-    verify: (req, res, buf) => {
-      try {
-        JSON.parse(buf);
-      } catch (e) {
-        res.status(400).json({
-          success: false,
-          message: "Invalid JSON format",
-        });
-        throw new Error("Invalid JSON");
-      }
-    },
-  })
-);
+app.use(express.json({ limit: "10mb" }));
 
 app.use(
   express.urlencoded({
@@ -271,6 +256,15 @@ app.get("/api/routes", (req, res) => {
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
+});
+
+// At the very bottom of app.js (after all routes)
+app.use((err, req, res, next) => {
+  console.error("🔥 Backend error:", err); // <— this will show the real cause
+  res.status(500).json({
+    success: false,
+    message: err.message || "Internal server error",
+  });
 });
 
 // Catch-all for undefined routes (404 handler)
