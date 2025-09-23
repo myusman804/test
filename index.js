@@ -267,6 +267,10 @@ app.use((err, req, res, next) => {
   });
 });
 
+app.get("/", (req, res) => {
+  res.json({ success: true, message: "API is running 🚀" });
+});
+
 // Catch-all for undefined routes (404 handler)
 app.use(notFound);
 
