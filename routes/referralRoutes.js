@@ -138,7 +138,7 @@ router.get("/link", authMiddleware, (req, res) => {
       data: {
         referralCode: req.user.referralCode,
         referralLink,
-        shareableMessage: `Join me on Party-Support and start earning! Use my referral code: ${req.user.referralCode}`,
+        shareableMessage: `Join me on Party-Support and get more updates! Use my referral code: ${req.user.referralCode}`,
         socialShareUrls: {
           facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
             referralLink
@@ -152,7 +152,7 @@ router.get("/link", authMiddleware, (req, res) => {
             referralLink
           )}`,
           whatsapp: `https://wa.me/?text=${encodeURIComponent(
-            `Join me on Party-Support and start earning! ${referralLink}`
+            `Join me on Party-Support and get more updates! ${referralLink}`
           )}`,
         },
         qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(

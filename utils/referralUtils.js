@@ -426,7 +426,7 @@ const getReferralStats = async (userId) => {
             process.env.FRONTEND_URL || "http://localhost:3000"
           }/register?ref=${user.referralCode}`
         )}`,
-        shareMessage: `Join me on AdsMoney and start earning! Use my referral code: ${user.referralCode}`,
+        shareMessage: `Join me on Party-Support and get more updates! Use my referral code: ${user.referralCode}`,
       },
 
       // Historical data for charts

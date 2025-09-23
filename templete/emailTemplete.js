@@ -31,7 +31,7 @@ const createVerificationEmailHTML = (name, otp) => {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>Email Verification - AdsMoney</title>
+    <title>Email Verification - Party-Support</title>
     <!--[if mso]>
     <noscript>
         <xml>
@@ -66,7 +66,7 @@ const createVerificationEmailHTML = (name, otp) => {
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6;">
     <!-- Preheader text -->
     <div style="display: none; max-height: 0; overflow: hidden; opacity: 0;">
-        Your AdsMoney verification code is ${safeOTP}. This code expires in 10 minutes.
+        Your Party-Support verification code is ${safeOTP}. This code expires in 10 minutes.
     </div>
     
     <!-- Main container -->
@@ -84,7 +84,7 @@ const createVerificationEmailHTML = (name, otp) => {
                                 <span style="color: #ffffff; font-size: 24px; font-weight: bold;">💰</span>
                             </div>
                             <h1 style="color: #ffffff; font-size: 32px; font-weight: 700; margin: 0; letter-spacing: -0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                                AdsMoney
+                                Party-Support
                             </h1>
                             <p style="color: rgba(255, 255, 255, 0.9); font-size: 16px; margin: 10px 0 0; font-weight: 400;">
                                 Your financial growth partner
@@ -98,7 +98,7 @@ const createVerificationEmailHTML = (name, otp) => {
                             <!-- Welcome message -->
                             <div style="text-align: center; margin-bottom: 40px;">
                                 <h2 style="font-size: 28px; font-weight: 600; color: #1a202c; margin-bottom: 16px; line-height: 1.3;">
-                                    🎉 Welcome to AdsMoney!
+                                    🎉 Welcome to Party-Support!
                                 </h2>
                                 <p style="font-size: 18px; color: #4a5568; margin-bottom: 0; line-height: 1.5;">
                                     Hi <strong style="color: #2d3748;">${safeName}</strong>! We're excited to have you join our community.
@@ -108,7 +108,7 @@ const createVerificationEmailHTML = (name, otp) => {
                             <!-- Verification instruction -->
                             <div style="background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); border-radius: 12px; padding: 30px; margin-bottom: 40px; border: 1px solid #e2e8f0;">
                                 <p style="font-size: 16px; color: #2d3748; margin: 0 0 20px; text-align: center; font-weight: 500;">
-                                    To complete your registration and start earning, please verify your email address using the code below:
+                                    To complete your registration and get more school updates, please verify your email address using the code below:
                                 </p>
                             </div>
 
@@ -140,7 +140,7 @@ const createVerificationEmailHTML = (name, otp) => {
                                             Security Notice
                                         </p>
                                         <p style="font-size: 14px; color: #744210; margin: 8px 0 0; line-height: 1.5;">
-                                            This code will expire in <strong>10 minutes</strong>. If you didn't create an AdsMoney account, please ignore this email and consider changing your passwords if you suspect unauthorized access.
+                                            This code will expire in <strong>10 minutes</strong>. If you didn't create an Party-Support account, please ignore this email and consider changing your passwords if you suspect unauthorized access.
                                         </p>
                                     </div>
                                 </div>
@@ -149,7 +149,7 @@ const createVerificationEmailHTML = (name, otp) => {
                             <!-- CTA and instructions -->
                             <div style="text-align: center; margin-bottom: 30px;">
                                 <p style="font-size: 16px; color: #4a5568; margin-bottom: 20px;">
-                                    Enter this code in the verification form to activate your account and start your journey with AdsMoney.
+                                    Enter this code in the verification form to activate your account and start your journey with Party-Support.
                                 </p>
                                 
                                 <!-- Benefits preview -->
@@ -159,7 +159,7 @@ const createVerificationEmailHTML = (name, otp) => {
                                     </p>
                                     <div style="text-align: left; max-width: 400px; margin: 0 auto;">
                                         <p style="font-size: 14px; color: #4a5568; margin: 8px 0; line-height: 1.5;">
-                                            ✨ Start earning with our referral program
+                                            ✨ Get more school updates with our referral program
                                         </p>
                                         <p style="font-size: 14px; color: #4a5568; margin: 8px 0; line-height: 1.5;">
                                             💰 Get ${
@@ -197,11 +197,11 @@ const createVerificationEmailHTML = (name, otp) => {
                     <tr>
                         <td style="background-color: #f8fafc; padding: 40px; text-align: center; border-top: 1px solid #e2e8f0;">
                             <p style="font-size: 14px; color: #718096; margin: 0 0 15px;">
-                                © ${new Date().getFullYear()} AdsMoney. All rights reserved.
+                                © ${new Date().getFullYear()} Party-Support. All rights reserved.
                             </p>
                             <p style="font-size: 12px; color: #a0aec0; margin: 0 0 15px; line-height: 1.5;">
                                 This email was sent to verify your account registration.<br>
-                                If you didn't sign up for AdsMoney, you can safely ignore this email.
+                                If you didn't sign up for Party-Support, you can safely ignore this email.
                             </p>
                             <div style="margin-top: 20px;">
                                 <a href="#" style="color: #718096; text-decoration: none; font-size: 12px; margin: 0 10px;">Privacy Policy</a>
@@ -252,7 +252,7 @@ const createResendOTPEmailHTML = (name, otp) => {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>New Verification Code - AdsMoney</title>
+    <title>New Verification Code - Party-Support</title>
     <style type="text/css">
         body, table, td, p, a, li, blockquote { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
         table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
@@ -269,7 +269,7 @@ const createResendOTPEmailHTML = (name, otp) => {
 <body style="margin: 0; padding: 0; background-color: #f0fdf4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
     <!-- Preheader -->
     <div style="display: none; max-height: 0; overflow: hidden; opacity: 0;">
-        Your new AdsMoney verification code is ${safeOTP}. Previous code has been replaced.
+        Your new Party-Support verification code is ${safeOTP}. Previous code has been replaced.
     </div>
     
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f0fdf4; min-height: 100vh;">
@@ -284,7 +284,7 @@ const createResendOTPEmailHTML = (name, otp) => {
                                 <span style="color: #ffffff; font-size: 24px;">🔄</span>
                             </div>
                             <h1 style="color: #ffffff; font-size: 32px; font-weight: 700; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                                AdsMoney
+                                Party-Support
                             </h1>
                             <p style="color: rgba(255, 255, 255, 0.9); font-size: 16px; margin: 10px 0 0;">
                                 New verification code ready
@@ -350,7 +350,7 @@ const createResendOTPEmailHTML = (name, otp) => {
                     <tr>
                         <td style="background-color: #f0fdf4; padding: 40px; text-align: center; border-top: 1px solid #dcfce7;">
                             <p style="font-size: 14px; color: #065f46; margin: 0 0 10px;">
-                                © ${new Date().getFullYear()} AdsMoney. All rights reserved.
+                                © ${new Date().getFullYear()} Party-Support. All rights reserved.
                             </p>
                             <p style="font-size: 12px; color: #059669; margin: 0;">
                                 This is a new verification code. Your previous code has been deactivated.
@@ -388,7 +388,7 @@ const createWelcomeEmailHTML = (name, referralCode) => {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to AdsMoney!</title>
+    <title>Welcome to Party-Support!</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8fafc;">
@@ -398,7 +398,7 @@ const createWelcomeEmailHTML = (name, referralCode) => {
                     <tr>
                         <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 50px 40px; text-align: center; border-radius: 16px 16px 0 0;">
                             <h1 style="color: #ffffff; font-size: 32px; font-weight: 700; margin: 0;">
-                                🎉 Welcome to AdsMoney!
+                                🎉 Welcome to Party-Support!
                             </h1>
                         </td>
                     </tr>
@@ -408,7 +408,7 @@ const createWelcomeEmailHTML = (name, referralCode) => {
                                 Congratulations, ${safeName}!
                             </h2>
                             <p style="color: #4a5568; font-size: 18px; line-height: 1.6; margin-bottom: 30px;">
-                                Your account is now verified and ready to start earning! 
+                                Your account is now verified and ready to start getting more school updates! 
                             </p>
                             
                             <div style="background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); border-radius: 12px; padding: 30px; margin: 30px 0;">
@@ -459,7 +459,7 @@ const createPasswordResetEmailHTML = (name, resetToken, resetUrl) => {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Your Password - AdsMoney</title>
+    <title>Reset Your Password - Party-Support</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #fef2f2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -482,7 +482,7 @@ const createPasswordResetEmailHTML = (name, resetToken, resetUrl) => {
                                 Hi ${safeName}!
                             </h2>
                             <p style="color: #4a5568; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
-                                We received a request to reset your AdsMoney account password. If you made this request, click the button below to reset your password:
+                                We received a request to reset your Party-Support account password. If you made this request, click the button below to reset your password:
                             </p>
                             
                             <div style="text-align: center; margin: 40px 0;">
@@ -509,7 +509,7 @@ const createPasswordResetEmailHTML = (name, resetToken, resetUrl) => {
                     <tr>
                         <td style="background-color: #fef2f2; padding: 30px; text-align: center; border-top: 1px solid #fecaca;">
                             <p style="color: #991b1b; font-size: 12px; margin: 0;">
-                                © ${new Date().getFullYear()} AdsMoney. This is a security email.
+                                © ${new Date().getFullYear()} Party-Support. This is a security email.
                             </p>
                         </td>
                     </tr>
@@ -555,7 +555,7 @@ const createReferralSuccessEmailHTML = (
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Referral Success! - AdsMoney</title>
+    <title>Referral Success! - Party-Support</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f0fdf4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -576,7 +576,7 @@ const createReferralSuccessEmailHTML = (
                                 Congratulations, ${safeReferrerName}! 🎊
                             </h2>
                             <p style="color: #4a5568; font-size: 18px; line-height: 1.6; margin-bottom: 30px;">
-                                <strong>${safeReferredName}</strong> has successfully joined AdsMoney using your referral code!
+                                <strong>${safeReferredName}</strong> has successfully joined Party-Support using your referral code!
                             </p>
 
                             <div style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-radius: 12px; padding: 30px; margin: 30px 0;">

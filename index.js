@@ -199,9 +199,9 @@ app.get("/api", (req, res) => {
       expiry: "24 hours",
     },
     rateLimit: {
-      general: "100 requests per 15 minutes",
+      general: "100 requests per 10 minutes",
       auth: "5 requests per 15 minutes",
-      otp: "3 requests per 5 minutes",
+      otp: "5 requests per 5 minutes",
     },
   });
 });
