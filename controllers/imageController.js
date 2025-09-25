@@ -623,11 +623,13 @@ const getUserImages = async (req, res) => {
   }
 };
 
-// Like/Unlike image
+// 🔥 FIXED: controllers/imageController.js - Like functionality
 const toggleLike = async (req, res) => {
   try {
     const { imageId } = req.params;
     const userId = req.user.id;
+
+    console.log(`💝 Like toggle request: User ${userId} on image ${imageId}`);
 
     const image = await Image.findById(imageId);
     if (!image) {
@@ -637,50 +639,69 @@ const toggleLike = async (req, res) => {
       });
     }
 
-    const existingLike = image.likes.find(
-      (like) => like.user.toString() === userId
+    // 🔥 FIXED: Better like checking logic
+    const likeIndex = image.likes.findIndex(
+      (like) => like.user.toString() === userId.toString()
     );
 
-    if (existingLike) {
-      // Unlike
-      await image.removeLike(userId);
+    const wasLiked = likeIndex !== -1;
+    let newLikeCount = image.likes.length;
+
+    if (wasLiked) {
+      // Unlike: Remove the like
+      image.likes.splice(likeIndex, 1);
+      newLikeCount = image.likes.length;
+
+      console.log(`💔 User unliked image. New count: ${newLikeCount}`);
+
+      // Update user stats
       await User.findByIdAndUpdate(userId, {
         $inc: { "stats.postsLiked": -1 },
+        "stats.lastActivity": new Date(),
       });
 
-      // refresh the image after update
-      const updatedImage = await Image.findById(imageId);
+      await image.save();
 
       res.json({
         success: true,
         message: "Image unliked successfully",
         data: {
           action: "unliked",
-          likeCount: image.likes.length,
+          likeCount: newLikeCount,
           isLiked: false,
         },
       });
     } else {
-      // Like
-      await image.addLike(userId, req.user.name);
+      // Like: Add new like
+      image.likes.push({
+        user: userId,
+        userName: req.user.name,
+        likedAt: new Date(),
+      });
+      newLikeCount = image.likes.length;
+
+      console.log(`❤️ User liked image. New count: ${newLikeCount}`);
+
+      // Update user stats
       await User.findByIdAndUpdate(userId, {
         $inc: { "stats.postsLiked": 1 },
+        "stats.lastActivity": new Date(),
       });
 
-      const updatedImage = await Image.findById(imageId);
+      await image.save();
 
       res.json({
         success: true,
         message: "Image liked successfully",
         data: {
           action: "liked",
-          likeCount: image.likes.length, // ✅ always a number
+          likeCount: newLikeCount,
           isLiked: true,
         },
       });
     }
   } catch (error) {
-    console.error("Toggle like error:", error);
+    console.error("❌ Toggle like error:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to toggle like",

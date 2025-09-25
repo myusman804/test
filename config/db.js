@@ -22,7 +22,7 @@ const connectDB = async () => {
       bufferCommands: false, // Disable mongoose buffering
 
       // Retry settings
-      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+      maxIdleTimeMS: 1000000, // Close connections after 30 seconds of inactivity
       heartbeatFrequencyMS: 2000, // Send heartbeat every 2 seconds
 
       // Atlas specific settings

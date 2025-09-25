@@ -100,18 +100,32 @@ const validatePasswordStrength = (password) => {
   };
 };
 
-// Send email with retry logic
+// 🔥 FIXED: Better email sending with retry logic
 const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const result = await transporter.sendMail(mailOptions);
-      console.log(`✅ Email sent successfully on attempt ${attempt}`);
+      console.log(`📤 Email sending attempt ${attempt}/${maxRetries}`);
+
+      // Add timeout to email sending
+      const sendPromise = transporter.sendMail(mailOptions);
+      const timeoutPromise = new Promise(
+        (_, reject) =>
+          setTimeout(() => reject(new Error("Email sending timeout")), 30000) // 30 second timeout
+      );
+
+      const result = await Promise.race([sendPromise, timeoutPromise]);
+
+      console.log(
+        `✅ Email sent successfully on attempt ${attempt}:`,
+        result.messageId
+      );
       return result;
     } catch (error) {
-      console.error(
-        `❌ Email sending failed on attempt ${attempt}:`,
-        error.message
-      );
+      console.error(`❌ Email sending failed on attempt ${attempt}:`, {
+        error: error.message,
+        code: error.code,
+        command: error.command,
+      });
 
       if (attempt === maxRetries) {
         throw new Error(
@@ -120,17 +134,23 @@ const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
       }
 
       // Wait before retry (exponential backoff)
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.pow(2, attempt) * 1000)
-      );
+      const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+      console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
   }
 };
 
-// Register User
+// 🔧 FIXED: controllers/authController.js - Registration OTP Issue
 exports.register = async (req, res) => {
   try {
     const { name, email, password, referralCode } = req.body;
+
+    console.log("📧 Registration request received:", {
+      name,
+      email: email?.substring(0, 10) + "...",
+      hasReferral: !!referralCode,
+    });
 
     // Additional server-side validation
     if (!name || name.trim().length < 2) {
@@ -209,11 +229,17 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Generate OTP
+    // 🔥 FIXED: Generate OTP with better validation
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    // Create user
+    console.log("🔑 Generated OTP for registration:", {
+      email: email.toLowerCase(),
+      otp: otp.substring(0, 2) + "****", // Log partially for debugging
+      expiresAt: otpExpiry,
+    });
+
+    // Create user FIRST before sending email
     const user = new User({
       name: name.trim(),
       email: email.toLowerCase(),
@@ -223,23 +249,40 @@ exports.register = async (req, res) => {
       otp,
       otpExpiry,
       isActive: true,
+      isVerified: false, // Will be set to true after OTP verification
     });
 
     await user.save();
+    console.log("✅ User created successfully with ID:", user._id);
 
-    // Send verification email
+    // 🔥 FIXED: Test email transporter before sending
+    try {
+      // Verify transporter configuration
+      const testResult = await transporter.verify();
+      console.log("📧 Email transporter verified:", testResult);
+    } catch (verifyError) {
+      console.error("❌ Email transporter verification failed:", verifyError);
+      // Continue anyway, but log the issue
+    }
+
+    // Send verification email with better error handling
     const mailOptions = {
       from: {
         name: process.env.EMAIL_FROM_NAME || "Party-Support",
         address: process.env.EMAIL_USER,
       },
-      to: email,
+      to: email.toLowerCase(),
       subject: "🔐 Verify Your Email - Party-Support",
       html: createVerificationEmailHTML(name.trim(), otp),
+      // Add text fallback
+      text: `Hi ${name.trim()},\n\nYour verification code is: ${otp}\n\nThis code expires in ${OTP_EXPIRY_MINUTES} minutes.\n\nBest regards,\nParty-Support Team`,
     };
 
+    console.log("📤 Attempting to send OTP email...");
+
     try {
-      await sendEmailWithRetry(mailOptions);
+      const emailResult = await sendEmailWithRetry(mailOptions);
+      console.log("✅ OTP email sent successfully:", emailResult?.messageId);
 
       res.status(201).json({
         success: true,
@@ -250,12 +293,13 @@ exports.register = async (req, res) => {
           email: user.email,
           referralCode: user.referralCode,
           otpExpiresAt: otpExpiry,
+          emailSent: true,
         },
       });
     } catch (emailError) {
-      // If email fails, still return success but note the issue
-      console.error("Email sending failed during registration:", emailError);
+      console.error("❌ Email sending failed during registration:", emailError);
 
+      // Don't fail the registration, but inform about email issue
       res.status(201).json({
         success: true,
         message:
@@ -265,11 +309,15 @@ exports.register = async (req, res) => {
           email: user.email,
           referralCode: user.referralCode,
           emailSent: false,
+          emailError:
+            process.env.NODE_ENV === "development"
+              ? emailError.message
+              : "Email service temporarily unavailable",
         },
       });
     }
   } catch (error) {
-    console.error("Registration error:", error);
+    console.error("❌ Registration error:", error);
 
     // Handle specific MongoDB errors
     if (error.code === 11000) {
@@ -288,11 +336,15 @@ exports.register = async (req, res) => {
   }
 };
 
-// Verify OTP
+// 🔥 FIXED: Verify OTP with better error handling
 exports.verifyOTP = async (req, res) => {
   try {
     const { email, otp } = req.body;
-    console.log("email: ", email);
+
+    console.log("📧 OTP verification request:", {
+      email: email?.substring(0, 10) + "...",
+      otp: otp?.substring(0, 2) + "****",
+    });
 
     if (!email || !otp) {
       return res.status(400).json({
@@ -301,11 +353,13 @@ exports.verifyOTP = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select(
-      "+otp +otpExpiry"
-    );
+    // 🔥 FIXED: More specific user lookup
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    }).select("+otp +otpExpiry");
 
     if (!user) {
+      console.log("❌ User not found for OTP verification:", email);
       return res.status(404).json({
         success: false,
         message: "User not found",
@@ -313,13 +367,33 @@ exports.verifyOTP = async (req, res) => {
     }
 
     if (user.isVerified) {
+      console.log("⚠️ User already verified:", user.email);
       return res.status(400).json({
         success: false,
         message: "Account is already verified",
       });
     }
 
-    if (!user.otp || user.otp.toString().trim() !== otp.toString().trim()) {
+    // 🔥 FIXED: Better OTP validation
+    if (!user.otp) {
+      console.log("❌ No OTP found for user:", user.email);
+      return res.status(400).json({
+        success: false,
+        message: "No OTP found. Please request a new verification code.",
+      });
+    }
+
+    const providedOTP = otp.toString().trim();
+    const storedOTP = user.otp.toString().trim();
+
+    console.log("🔍 OTP comparison:", {
+      provided: providedOTP.substring(0, 2) + "****",
+      stored: storedOTP.substring(0, 2) + "****",
+      match: providedOTP === storedOTP,
+    });
+
+    if (storedOTP !== providedOTP) {
+      console.log("❌ Invalid OTP provided for user:", user.email);
       return res.status(400).json({
         success: false,
         message: "Invalid OTP code",
@@ -327,6 +401,7 @@ exports.verifyOTP = async (req, res) => {
     }
 
     if (!user.otpExpiry || new Date() > user.otpExpiry) {
+      console.log("❌ Expired OTP for user:", user.email);
       return res.status(400).json({
         success: false,
         message: "OTP has expired. Please request a new verification code.",
@@ -345,8 +420,11 @@ exports.verifyOTP = async (req, res) => {
         user.lastLogin = new Date();
         await user.save({ session });
 
+        console.log("✅ User verified successfully:", user.email);
+
         // Process referral reward if user was referred
         if (user.referredBy) {
+          console.log("🎁 Processing referral reward for:", user.referredBy);
           await processReferralReward(user.referredBy, user._id, session);
         }
       });
@@ -364,7 +442,7 @@ exports.verifyOTP = async (req, res) => {
       await session.endSession();
     }
   } catch (error) {
-    console.error("OTP verification error:", error);
+    console.error("❌ OTP verification error:", error);
     res.status(500).json({
       success: false,
       message: "Verification failed. Please try again.",
@@ -373,10 +451,12 @@ exports.verifyOTP = async (req, res) => {
   }
 };
 
-// Resend OTP
+// 🔥 FIXED: Resend OTP with better validation
 exports.resendOTP = async (req, res) => {
   try {
     const { email } = req.body;
+
+    console.log("🔄 Resend OTP request for:", email?.substring(0, 10) + "...");
 
     if (!email) {
       return res.status(400).json({
@@ -386,7 +466,7 @@ exports.resendOTP = async (req, res) => {
     }
 
     const user = await User.findOne({
-      email: email.toLowerCase(),
+      email: email.toLowerCase().trim(),
     });
 
     if (!user) {
@@ -403,37 +483,59 @@ exports.resendOTP = async (req, res) => {
       });
     }
 
-    // Generate new OTP
-    const otp = generateOTP();
-    const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+    // 🔥 FIXED: Generate new OTP with proper validation
+    const newOtp = generateOTP();
+    const newOtpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    user.otp = otp;
-    user.otpExpiry = otpExpiry;
+    console.log("🔑 Generated new OTP for resend:", {
+      email: user.email,
+      otp: newOtp.substring(0, 2) + "****",
+      expiresAt: newOtpExpiry,
+    });
+
+    user.otp = newOtp;
+    user.otpExpiry = newOtpExpiry;
     await user.save();
 
-    // Send new OTP email
+    // Send new OTP email with retry
     const mailOptions = {
       from: {
         name: process.env.EMAIL_FROM_NAME || "Party-Support",
         address: process.env.EMAIL_USER,
       },
-      to: email,
+      to: user.email,
       subject: "🔄 New Verification Code - Party-Support",
-      html: createResendOTPEmailHTML(user.name, otp),
+      html: createResendOTPEmailHTML(user.name, newOtp),
+      text: `Hi ${user.name},\n\nYour new verification code is: ${newOtp}\n\nThis code expires in ${OTP_EXPIRY_MINUTES} minutes.\n\nBest regards,\nParty-Support Team`,
     };
 
-    await sendEmailWithRetry(mailOptions);
+    try {
+      await sendEmailWithRetry(mailOptions);
+      console.log("✅ New OTP email sent successfully");
 
-    res.json({
-      success: true,
-      message:
-        "New verification code sent successfully! Please check your email.",
-      data: {
-        otpExpiresAt: otpExpiry,
-      },
-    });
+      res.json({
+        success: true,
+        message:
+          "New verification code sent successfully! Please check your email.",
+        data: {
+          otpExpiresAt: newOtpExpiry,
+          emailSent: true,
+        },
+      });
+    } catch (emailError) {
+      console.error("❌ Failed to send resend OTP email:", emailError);
+
+      res.status(500).json({
+        success: false,
+        message: "Failed to send verification code. Please try again later.",
+        error:
+          process.env.NODE_ENV === "development"
+            ? emailError.message
+            : "Email service temporarily unavailable",
+      });
+    }
   } catch (error) {
-    console.error("Resend OTP error:", error);
+    console.error("❌ Resend OTP error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to resend verification code. Please try again.",
