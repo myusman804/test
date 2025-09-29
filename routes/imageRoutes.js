@@ -8,6 +8,10 @@ const {
   addComment,
   deleteComment,
   getImageDetails,
+  addReplyToComment,
+  toggleCommentLike,
+  toggleReplyLike,
+  createTextPost,
   deleteImage,
 } = require("../controllers/imageController");
 const authMiddleware = require("../middleware/authMiddleware");
@@ -56,6 +60,43 @@ router.post(
   uploadImages // Process upload
 );
 console.log("✅ POST /upload route registered");
+
+// 🔥 ROUTE: CREATE TEXT-ONLY POST
+router.post("/text", authMiddleware, uploadLimiter, createTextPost);
+console.log("✅ POST /text route registered (create text post)");
+
+// 🔥 ROUTE: ADD REPLY TO COMMENT (COMMENTS TO COMMENTS)
+router.post(
+  "/:imageId/comments/:commentId/replies",
+  authMiddleware,
+  generalLimiter,
+  addReplyToComment
+);
+console.log(
+  "✅ POST /:imageId/comments/:commentId/replies route registered (add reply to comment)"
+);
+
+// 🔥 ROUTE: TOGGLE COMMENT LIKE (LIKE COMMENTS)
+router.post(
+  "/:imageId/comments/:commentId/like",
+  authMiddleware,
+  generalLimiter,
+  toggleCommentLike
+);
+console.log(
+  "✅ POST /:imageId/comments/:commentId/like route registered (toggle comment like)"
+);
+
+// 🔥 ROUTE: TOGGLE REPLY LIKE (LIKE REPLIES)
+router.post(
+  "/:imageId/comments/:commentId/replies/:replyId/like",
+  authMiddleware,
+  generalLimiter,
+  toggleReplyLike
+);
+console.log(
+  "✅ POST /:imageId/comments/:commentId/replies/:replyId/like route registered (toggle reply like)"
+);
 
 // Get user's uploaded images
 router.get("/user/my-images", authMiddleware, generalLimiter, getUserImages);

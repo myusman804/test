@@ -21,26 +21,77 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 
 // Email Transporter Setup with better configuration
 const createEmailTransporter = () => {
+  console.log("🔧 Setting up email transporter...");
+
+  // Validate email configuration
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error(
+      "❌ Email configuration missing! Check EMAIL_USER and EMAIL_PASS in .env"
+    );
+    throw new Error("Email configuration is required for OTP sending");
+  }
+
   const transporter = nodemailer.createTransport({
     service: process.env.EMAIL_SERVICE || "gmail",
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+    // Enhanced configuration for better reliability
     pool: true,
     maxConnections: 5,
     maxMessages: 100,
     rateDelta: 20000, // Send maximum 3 emails per 20 seconds
     rateLimit: 3,
+    // Add timeout settings
+    connectionTimeout: 60000, // 60 seconds
+    greetingTimeout: 30000, // 30 seconds
+    socketTimeout: 60000, // 60 seconds
+    // Debug settings
+    debug: process.env.NODE_ENV === "development",
+    logger: process.env.NODE_ENV === "development",
   });
 
-  // Verify transporter on startup
-  transporter.verify((error, success) => {
-    if (error) {
-      console.error("❌ Email transporter configuration error:", error.message);
-    } else {
-      console.log("✅ Email server is ready to send messages");
+  // Enhanced verification with retry
+  const verifyTransporter = async (retries = 3) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        console.log(
+          `📧 Verifying email transporter (attempt ${attempt}/${retries})`
+        );
+        await transporter.verify();
+        console.log("✅ Email transporter verified successfully");
+        return true;
+      } catch (error) {
+        console.error(
+          `❌ Email transporter verification failed (attempt ${attempt}):`,
+          {
+            error: error.message,
+            code: error.code,
+            command: error.command,
+          }
+        );
+
+        if (attempt === retries) {
+          console.error(
+            "❌ Email transporter verification failed after all attempts"
+          );
+          // Don't throw error, just log it - we'll handle it in sendEmail
+          return false;
+        }
+
+        // Wait before retry
+        await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+      }
     }
+  };
+
+  // Verify on startup (async)
+  verifyTransporter().catch((error) => {
+    console.error(
+      "❌ Initial email transporter verification failed:",
+      error.message
+    );
   });
 
   return transporter;
@@ -50,7 +101,17 @@ const transporter = createEmailTransporter();
 
 // Generate secure OTP
 const generateOTP = () => {
-  return crypto.randomInt(100000, 999999).toString();
+  // Generate cryptographically secure 6-digit OTP
+  const otp = crypto.randomInt(100000, 999999).toString();
+
+  // Validate OTP format
+  if (!/^\d{6}$/.test(otp)) {
+    console.error("❌ Invalid OTP generated:", otp);
+    throw new Error("Failed to generate valid OTP");
+  }
+
+  console.log("✅ Generated valid OTP:", otp.substring(0, 2) + "****");
+  return otp;
 };
 
 // Check if user is admin
@@ -102,41 +163,82 @@ const validatePasswordStrength = (password) => {
 
 // 🔥 FIXED: Better email sending with retry logic
 const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
+  console.log(`📤 Attempting to send email to: ${mailOptions.to}`);
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`📤 Email sending attempt ${attempt}/${maxRetries}`);
+      console.log(`📧 Email sending attempt ${attempt}/${maxRetries}`);
 
-      // Add timeout to email sending
+      // Validate mail options
+      if (!mailOptions.to || !mailOptions.subject || !mailOptions.html) {
+        throw new Error("Invalid email options: missing required fields");
+      }
+
+      // Test transporter before sending
+      console.log("🔍 Testing transporter connection...");
+      await transporter.verify();
+      console.log("✅ Transporter connection verified");
+
+      // Send email with timeout
       const sendPromise = transporter.sendMail(mailOptions);
-      const timeoutPromise = new Promise(
-        (_, reject) =>
-          setTimeout(() => reject(new Error("Email sending timeout")), 30000) // 30 second timeout
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Email sending timeout after 45 seconds")),
+          45000
+        )
       );
 
       const result = await Promise.race([sendPromise, timeoutPromise]);
 
-      console.log(
-        `✅ Email sent successfully on attempt ${attempt}:`,
-        result.messageId
-      );
+      console.log(`✅ Email sent successfully on attempt ${attempt}:`, {
+        messageId: result.messageId,
+        response: result.response,
+        envelope: result.envelope,
+      });
+
       return result;
     } catch (error) {
       console.error(`❌ Email sending failed on attempt ${attempt}:`, {
         error: error.message,
         code: error.code,
         command: error.command,
+        responseCode: error.responseCode,
+        response: error.response,
       });
 
+      // Specific error handling
+      if (error.code === "EAUTH") {
+        console.error(
+          "❌ Email authentication failed - check EMAIL_USER and EMAIL_PASS"
+        );
+        throw new Error(
+          "Email authentication failed. Please check your email credentials."
+        );
+      }
+
+      if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED") {
+        console.error(
+          "❌ Email server connection failed - check internet connection"
+        );
+      }
+
+      if (error.responseCode === 550) {
+        console.error(
+          "❌ Email rejected by server - possible spam or invalid recipient"
+        );
+      }
+
       if (attempt === maxRetries) {
+        console.error(`❌ Email sending failed after ${maxRetries} attempts`);
         throw new Error(
           `Failed to send email after ${maxRetries} attempts: ${error.message}`
         );
       }
 
-      // Wait before retry (exponential backoff)
-      const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-      console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      // Progressive backoff delay
+      const delay = Math.min(1000 * Math.pow(2, attempt), 10000); // Max 10 seconds
+      console.log(`⏳ Waiting ${delay}ms before retry...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 };
@@ -147,16 +249,18 @@ exports.register = async (req, res) => {
     const { name, email, password, referralCode } = req.body;
 
     console.log("📧 Registration request received:", {
-      name,
-      email: email?.substring(0, 10) + "...",
+      name: name?.substring(0, 20),
+      email: email?.substring(0, 30),
       hasReferral: !!referralCode,
+      timestamp: new Date().toISOString(),
     });
 
-    // Additional server-side validation
+    // Enhanced input validation
     if (!name || name.trim().length < 2) {
       return res.status(400).json({
         success: false,
         message: "Name must be at least 2 characters long",
+        code: "INVALID_NAME",
       });
     }
 
@@ -164,6 +268,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Please provide a valid email address",
+        code: "INVALID_EMAIL",
       });
     }
 
@@ -174,38 +279,45 @@ exports.register = async (req, res) => {
         success: false,
         message: "Password does not meet requirements",
         errors: passwordValidation.errors,
+        code: "WEAK_PASSWORD",
       });
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({
-      email: email.toLowerCase(),
-    });
+    const cleanEmail = email.toLowerCase().trim();
 
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: cleanEmail });
     if (existingUser) {
+      console.log("⚠️ Registration attempt with existing email:", cleanEmail);
       return res.status(409).json({
         success: false,
         message: "An account with this email already exists",
+        code: "EMAIL_EXISTS",
       });
     }
 
     // Validate referral code if provided
     let referrer = null;
     if (referralCode && referralCode.trim()) {
+      console.log("🔍 Validating referral code:", referralCode.trim());
       const referralCheck = await verifyReferralCode(referralCode.trim());
       if (!referralCheck.valid) {
         return res.status(400).json({
           success: false,
           message: referralCheck.message,
+          code: "INVALID_REFERRAL",
         });
       }
       referrer = referralCheck.referrer;
+      console.log("✅ Valid referral code from:", referrer.name);
     }
 
     // Hash password
+    console.log("🔒 Hashing password...");
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     // Generate unique referral code with retry logic
+    console.log("🎯 Generating unique referral code...");
     let newReferralCode;
     let isUnique = false;
     let attempts = 0;
@@ -223,26 +335,36 @@ exports.register = async (req, res) => {
     }
 
     if (!isUnique) {
+      console.error(
+        "❌ Failed to generate unique referral code after",
+        maxAttempts,
+        "attempts"
+      );
       return res.status(500).json({
         success: false,
         message: "Unable to generate unique referral code. Please try again.",
+        code: "REFERRAL_CODE_GENERATION_FAILED",
       });
     }
 
-    // 🔥 FIXED: Generate OTP with better validation
+    console.log("✅ Generated unique referral code:", newReferralCode);
+
+    // 🔥 FIXED: Generate OTP with enhanced validation
     const otp = generateOTP();
     const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     console.log("🔑 Generated OTP for registration:", {
-      email: email.toLowerCase(),
-      otp: otp.substring(0, 2) + "****", // Log partially for debugging
-      expiresAt: otpExpiry,
+      email: cleanEmail,
+      otp: otp.substring(0, 2) + "****", // Partial log for security
+      expiresAt: otpExpiry.toISOString(),
+      expiresInMinutes: OTP_EXPIRY_MINUTES,
     });
 
-    // Create user FIRST before sending email
+    // Create user FIRST before attempting email
+    console.log("👤 Creating user account...");
     const user = new User({
       name: name.trim(),
-      email: email.toLowerCase(),
+      email: cleanEmail,
       password: hashedPassword,
       referralCode: newReferralCode.toUpperCase(),
       referredBy: referrer ? referrer._id : null,
@@ -250,40 +372,58 @@ exports.register = async (req, res) => {
       otpExpiry,
       isActive: true,
       isVerified: false, // Will be set to true after OTP verification
+      otpAttempts: 0, // Reset OTP attempts
     });
 
     await user.save();
     console.log("✅ User created successfully with ID:", user._id);
 
-    // 🔥 FIXED: Test email transporter before sending
+    // 🔥 ENHANCED: Email sending with comprehensive error handling
     try {
-      // Verify transporter configuration
-      const testResult = await transporter.verify();
-      console.log("📧 Email transporter verified:", testResult);
-    } catch (verifyError) {
-      console.error("❌ Email transporter verification failed:", verifyError);
-      // Continue anyway, but log the issue
-    }
+      console.log("📧 Preparing to send OTP email...");
 
-    // Send verification email with better error handling
-    const mailOptions = {
-      from: {
-        name: process.env.EMAIL_FROM_NAME || "Party-Support",
-        address: process.env.EMAIL_USER,
-      },
-      to: email.toLowerCase(),
-      subject: "🔐 Verify Your Email - Party-Support",
-      html: createVerificationEmailHTML(name.trim(), otp),
-      // Add text fallback
-      text: `Hi ${name.trim()},\n\nYour verification code is: ${otp}\n\nThis code expires in ${OTP_EXPIRY_MINUTES} minutes.\n\nBest regards,\nParty-Support Team`,
-    };
+      // Validate email template data
+      if (!createVerificationEmailHTML) {
+        throw new Error("Email template function not available");
+      }
 
-    console.log("📤 Attempting to send OTP email...");
+      // Create email content
+      const emailHTML = createVerificationEmailHTML(name.trim(), otp);
+      const emailText = `Hi ${name.trim()},\n\nYour verification code is: ${otp}\n\nThis code expires in ${OTP_EXPIRY_MINUTES} minutes.\n\nBest regards,\nParty-Support Team`;
 
-    try {
-      const emailResult = await sendEmailWithRetry(mailOptions);
-      console.log("✅ OTP email sent successfully:", emailResult?.messageId);
+      const mailOptions = {
+        from: {
+          name: process.env.EMAIL_FROM_NAME || "Party-Support",
+          address: process.env.EMAIL_USER,
+        },
+        to: cleanEmail,
+        subject: "🔐 Verify Your Email - Party-Support",
+        html: emailHTML,
+        text: emailText, // Fallback text version
+        // Additional headers for better delivery
+        headers: {
+          "X-Mailer": "Party-Support Registration System",
+          "X-Priority": "1",
+        },
+      };
 
+      console.log("📤 Sending OTP email with options:", {
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        from: mailOptions.from,
+        hasHTML: !!mailOptions.html,
+        hasText: !!mailOptions.text,
+      });
+
+      // Send email with retry
+      const emailResult = await sendEmailWithRetry(mailOptions, 3);
+
+      console.log("✅ OTP email sent successfully:", {
+        messageId: emailResult.messageId,
+        response: emailResult.response?.substring(0, 100),
+      });
+
+      // Success response with email confirmation
       res.status(201).json({
         success: true,
         message:
@@ -292,14 +432,25 @@ exports.register = async (req, res) => {
           userId: user._id,
           email: user.email,
           referralCode: user.referralCode,
-          otpExpiresAt: otpExpiry,
+          otpExpiresAt: otpExpiry.toISOString(),
+          otpExpiresInMinutes: OTP_EXPIRY_MINUTES,
           emailSent: true,
+          emailMessageId: emailResult.messageId,
         },
       });
     } catch (emailError) {
-      console.error("❌ Email sending failed during registration:", emailError);
+      console.error("❌ Email sending failed during registration:", {
+        error: emailError.message,
+        code: emailError.code,
+        userId: user._id,
+        email: cleanEmail,
+      });
 
-      // Don't fail the registration, but inform about email issue
+      // Update user with email failure info
+      user.otpAttempts = 1; // Mark that email sending was attempted
+      await user.save();
+
+      // Don't fail the entire registration - user can request resend
       res.status(201).json({
         success: true,
         message:
@@ -308,29 +459,48 @@ exports.register = async (req, res) => {
           userId: user._id,
           email: user.email,
           referralCode: user.referralCode,
+          otpExpiresAt: otpExpiry.toISOString(),
           emailSent: false,
-          emailError:
-            process.env.NODE_ENV === "development"
-              ? emailError.message
-              : "Email service temporarily unavailable",
+          emailError: "Email service temporarily unavailable",
+          canResendOTP: true,
+          resendAvailableIn: 0, // Can resend immediately on failure
         },
       });
     }
   } catch (error) {
-    console.error("❌ Registration error:", error);
+    console.error("❌ Registration error:", {
+      error: error.message,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      timestamp: new Date().toISOString(),
+    });
 
     // Handle specific MongoDB errors
     if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
+      const field = Object.keys(error.keyPattern || {})[0] || "field";
       return res.status(409).json({
         success: false,
         message: `This ${field} is already registered`,
+        code: "DUPLICATE_FIELD",
+      });
+    }
+
+    // Handle validation errors
+    if (error.name === "ValidationError") {
+      const validationErrors = Object.values(error.errors).map(
+        (err) => err.message
+      );
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validationErrors,
+        code: "VALIDATION_ERROR",
       });
     }
 
     res.status(500).json({
       success: false,
       message: "Registration failed. Please try again.",
+      code: "INTERNAL_ERROR",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
@@ -456,30 +626,62 @@ exports.resendOTP = async (req, res) => {
   try {
     const { email } = req.body;
 
-    console.log("🔄 Resend OTP request for:", email?.substring(0, 10) + "...");
+    console.log("🔄 Resend OTP request:", {
+      email: email?.substring(0, 30),
+      timestamp: new Date().toISOString(),
+    });
 
     if (!email) {
       return res.status(400).json({
         success: false,
         message: "Email is required",
+        code: "EMAIL_REQUIRED",
       });
     }
 
-    const user = await User.findOne({
-      email: email.toLowerCase().trim(),
-    });
+    const cleanEmail = email.toLowerCase().trim();
 
+    const user = await User.findOne({ email: cleanEmail });
     if (!user) {
+      console.log("❌ Resend OTP: User not found for email:", cleanEmail);
       return res.status(404).json({
         success: false,
         message: "User not found",
+        code: "USER_NOT_FOUND",
       });
     }
 
     if (user.isVerified) {
+      console.log("⚠️ Resend OTP: User already verified:", cleanEmail);
       return res.status(400).json({
         success: false,
         message: "Account is already verified",
+        code: "ALREADY_VERIFIED",
+      });
+    }
+
+    // Check rate limiting for OTP resend
+    const now = new Date();
+    const timeSinceLastOTP = user.updatedAt ? now - user.updatedAt : Infinity;
+    const minWaitTime = 60 * 1000; // 1 minute between resends
+
+    if (timeSinceLastOTP < minWaitTime) {
+      const waitSeconds = Math.ceil((minWaitTime - timeSinceLastOTP) / 1000);
+      return res.status(429).json({
+        success: false,
+        message: `Please wait ${waitSeconds} seconds before requesting another OTP`,
+        code: "RATE_LIMITED",
+        waitSeconds,
+      });
+    }
+
+    // Check max OTP attempts
+    if (user.otpAttempts >= 10) {
+      console.log("❌ Max OTP attempts reached for user:", cleanEmail);
+      return res.status(429).json({
+        success: false,
+        message: "Maximum OTP attempts reached. Please contact support.",
+        code: "MAX_ATTEMPTS_REACHED",
       });
     }
 
@@ -488,46 +690,69 @@ exports.resendOTP = async (req, res) => {
     const newOtpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
     console.log("🔑 Generated new OTP for resend:", {
-      email: user.email,
+      email: cleanEmail,
       otp: newOtp.substring(0, 2) + "****",
-      expiresAt: newOtpExpiry,
+      expiresAt: newOtpExpiry.toISOString(),
+      attempt: user.otpAttempts + 1,
     });
 
+    // Update user with new OTP
     user.otp = newOtp;
     user.otpExpiry = newOtpExpiry;
+    user.otpAttempts = (user.otpAttempts || 0) + 1;
     await user.save();
 
-    // Send new OTP email with retry
-    const mailOptions = {
-      from: {
-        name: process.env.EMAIL_FROM_NAME || "Party-Support",
-        address: process.env.EMAIL_USER,
-      },
-      to: user.email,
-      subject: "🔄 New Verification Code - Party-Support",
-      html: createResendOTPEmailHTML(user.name, newOtp),
-      text: `Hi ${user.name},\n\nYour new verification code is: ${newOtp}\n\nThis code expires in ${OTP_EXPIRY_MINUTES} minutes.\n\nBest regards,\nParty-Support Team`,
-    };
-
+    // Send new OTP email
     try {
-      await sendEmailWithRetry(mailOptions);
-      console.log("✅ New OTP email sent successfully");
+      const emailHTML = createResendOTPEmailHTML(user.name, newOtp);
+      const emailText = `Hi ${user.name},\n\nYour new verification code is: ${newOtp}\n\nThis code expires in ${OTP_EXPIRY_MINUTES} minutes.\n\nBest regards,\nParty-Support Team`;
+
+      const mailOptions = {
+        from: {
+          name: process.env.EMAIL_FROM_NAME || "Party-Support",
+          address: process.env.EMAIL_USER,
+        },
+        to: cleanEmail,
+        subject: "🔄 New Verification Code - Party-Support",
+        html: emailHTML,
+        text: emailText,
+        headers: {
+          "X-Mailer": "Party-Support OTP Resend System",
+          "X-Priority": "1",
+        },
+      };
+
+      const emailResult = await sendEmailWithRetry(mailOptions, 3);
+
+      console.log("✅ New OTP email sent successfully:", {
+        messageId: emailResult.messageId,
+        attempt: user.otpAttempts,
+      });
 
       res.json({
         success: true,
         message:
           "New verification code sent successfully! Please check your email.",
         data: {
-          otpExpiresAt: newOtpExpiry,
+          otpExpiresAt: newOtpExpiry.toISOString(),
+          otpExpiresInMinutes: OTP_EXPIRY_MINUTES,
           emailSent: true,
+          emailMessageId: emailResult.messageId,
+          attemptsRemaining: Math.max(0, 10 - user.otpAttempts),
         },
       });
     } catch (emailError) {
-      console.error("❌ Failed to send resend OTP email:", emailError);
+      console.error("❌ Failed to send resend OTP email:", {
+        error: emailError.message,
+        code: emailError.code,
+        email: cleanEmail,
+        attempt: user.otpAttempts,
+      });
 
       res.status(500).json({
         success: false,
         message: "Failed to send verification code. Please try again later.",
+        code: "EMAIL_SEND_FAILED",
         error:
           process.env.NODE_ENV === "development"
             ? emailError.message
@@ -535,10 +760,15 @@ exports.resendOTP = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error("❌ Resend OTP error:", error);
+    console.error("❌ Resend OTP error:", {
+      error: error.message,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
+
     res.status(500).json({
       success: false,
       message: "Failed to resend verification code. Please try again.",
+      code: "INTERNAL_ERROR",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }

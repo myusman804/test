@@ -619,6 +619,42 @@ const validateEmailInputs = (templateName, ...inputs) => {
   });
 };
 
+const validateEmailConfiguration = () => {
+  console.log("🔍 Validating email configuration...");
+
+  const requiredVars = ["EMAIL_USER", "EMAIL_PASS", "EMAIL_SERVICE"];
+  const missing = requiredVars.filter((varName) => !process.env[varName]);
+
+  if (missing.length > 0) {
+    console.error("❌ Missing email configuration:", missing);
+    throw new Error(
+      `Missing email environment variables: ${missing.join(", ")}`
+    );
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(process.env.EMAIL_USER)) {
+    console.error("❌ Invalid EMAIL_USER format:", process.env.EMAIL_USER);
+    throw new Error("EMAIL_USER must be a valid email address");
+  }
+
+  console.log("✅ Email configuration validated:", {
+    service: process.env.EMAIL_SERVICE,
+    user: process.env.EMAIL_USER,
+    hasPassword: !!process.env.EMAIL_PASS,
+  });
+};
+
+// Call validation on startup
+try {
+  validateEmailConfiguration();
+} catch (error) {
+  console.error("❌ Email configuration validation failed:", error.message);
+  // Don't exit process, but log warning
+  console.warn("⚠️ Email functionality may not work properly");
+}
+
 // Export all template functions
 module.exports = {
   createVerificationEmailHTML,

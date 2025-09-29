@@ -645,14 +645,13 @@ const toggleLike = async (req, res) => {
     );
 
     const wasLiked = likeIndex !== -1;
-    let newLikeCount = image.likes.length;
 
     if (wasLiked) {
       // Unlike: Remove the like
       image.likes.splice(likeIndex, 1);
-      newLikeCount = image.likes.length;
+      image.likeCount = image.likes.length;
 
-      console.log(`💔 User unliked image. New count: ${newLikeCount}`);
+      console.log(`💔 User unliked image. New count: ${image.likeCount}`);
 
       // Update user stats
       await User.findByIdAndUpdate(userId, {
@@ -667,7 +666,7 @@ const toggleLike = async (req, res) => {
         message: "Image unliked successfully",
         data: {
           action: "unliked",
-          likeCount: newLikeCount,
+          likeCount: image.likeCount,
           isLiked: false,
         },
       });
@@ -678,9 +677,9 @@ const toggleLike = async (req, res) => {
         userName: req.user.name,
         likedAt: new Date(),
       });
-      newLikeCount = image.likes.length;
+      image.likeCount = image.likes.length;
 
-      console.log(`❤️ User liked image. New count: ${newLikeCount}`);
+      console.log(`❤️ User liked image. New count: ${image.likeCount}`);
 
       // Update user stats
       await User.findByIdAndUpdate(userId, {
@@ -695,7 +694,7 @@ const toggleLike = async (req, res) => {
         message: "Image liked successfully",
         data: {
           action: "liked",
-          likeCount: newLikeCount,
+          likeCount: image.likeCount,
           isLiked: true,
         },
       });
@@ -763,6 +762,194 @@ const addComment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || "Failed to add comment",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+const addReplyToComment = async (req, res) => {
+  try {
+    const { imageId, commentId } = req.params;
+    const { content } = req.body;
+
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Reply content is required",
+      });
+    }
+
+    const Image = require("../models/Image");
+    const image = await Image.findById(imageId);
+    if (!image) {
+      return res.status(404).json({
+        success: false,
+        message: "Image not found",
+      });
+    }
+
+    const reply = image.addReplyToComment(
+      commentId,
+      req.user.id,
+      req.user.name,
+      req.user.email,
+      content
+    );
+    await image.save();
+
+    // Update user stats
+    await User.findByIdAndUpdate(req.user.id, {
+      $inc: { "stats.commentsPosted": 1 },
+      "stats.lastActivity": new Date(),
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Reply added successfully",
+      data: { reply },
+    });
+  } catch (error) {
+    console.error("Add reply error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to add reply",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// 🔥 FUNCTION: TOGGLE COMMENT LIKE (LIKE COMMENTS)
+const toggleCommentLike = async (req, res) => {
+  try {
+    const { imageId, commentId } = req.params;
+
+    const Image = require("../models/Image");
+    const image = await Image.findById(imageId);
+    if (!image) {
+      return res.status(404).json({
+        success: false,
+        message: "Image not found",
+      });
+    }
+
+    const result = image.toggleCommentLike(
+      commentId,
+      req.user.id,
+      req.user.name
+    );
+    await image.save();
+
+    res.json({
+      success: true,
+      message: `Comment ${result.action} successfully`,
+      data: {
+        action: result.action,
+        likeCount: result.likeCount,
+        isLiked: result.action === "liked",
+      },
+    });
+  } catch (error) {
+    console.error("Toggle comment like error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to toggle comment like",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// 🔥 FUNCTION: TOGGLE REPLY LIKE (LIKE REPLIES)
+const toggleReplyLike = async (req, res) => {
+  try {
+    const { imageId, commentId, replyId } = req.params;
+
+    const Image = require("../models/Image");
+    const image = await Image.findById(imageId);
+    if (!image) {
+      return res.status(404).json({
+        success: false,
+        message: "Image not found",
+      });
+    }
+
+    const result = image.toggleReplyLike(
+      commentId,
+      replyId,
+      req.user.id,
+      req.user.name
+    );
+    await image.save();
+
+    res.json({
+      success: true,
+      message: `Reply ${result.action} successfully`,
+      data: {
+        action: result.action,
+        likeCount: result.likeCount,
+        isLiked: result.action === "liked",
+      },
+    });
+  } catch (error) {
+    console.error("Toggle reply like error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to toggle reply like",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// 🔥 FUNCTION: CREATE TEXT-ONLY POST
+const createTextPost = async (req, res) => {
+  try {
+    const { content, category = "general", tags = [] } = req.body;
+
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Text content is required for text posts",
+      });
+    }
+
+    const Image = require("../models/Image");
+    const User = require("../models/User");
+
+    // Create text post using existing Image model
+    const textPost = new Image({
+      filename: `text_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      originalName: "text_post",
+      url: "", // Empty for text posts
+      thumbnailUrl: "", // Empty for text posts
+      size: 0, // Zero for text posts
+      dimensions: { width: 0, height: 0 }, // Zero for text posts
+      format: "text", // New format type for text posts
+      createdBy: req.user.id,
+      createdByName: req.user.name,
+      createdByEmail: req.user.email,
+      content: content.trim(),
+      category,
+      tags: Array.isArray(tags) ? tags : tags.split(",").map((t) => t.trim()),
+      postType: "text", // Add this field to differentiate
+    });
+
+    await textPost.save();
+
+    // Update user stats
+    await User.findByIdAndUpdate(req.user.id, {
+      $inc: { "stats.totalUploads": 1 },
+      "stats.lastActivity": new Date(),
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Text post created successfully",
+      data: { post: textPost },
+    });
+  } catch (error) {
+    console.error("Create text post error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create text post",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
@@ -958,5 +1145,9 @@ module.exports = {
   deleteComment,
   getImageDetails,
   deleteImage,
+  createTextPost,
+  toggleReplyLike,
+  addReplyToComment,
+  toggleCommentLike,
   UPLOAD_CONFIG,
 };

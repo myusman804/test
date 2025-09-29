@@ -7,6 +7,8 @@ const {
   getFollowSuggestions,
   getSocialFeed,
   getUserProfile,
+  getAllFollowersCount,
+  getAllFollowingCount,
   searchUsers,
 } = require("../controllers/socialController");
 const authMiddleware = require("../middleware/authMiddleware");
@@ -59,6 +61,48 @@ router.get(
   getFollowers
 );
 console.log("✅ GET /users/:userId/followers route registered");
+
+// 🔥 ROUTE: GET ALL FOLLOWERS COUNT
+router.get(
+  "/users/:userId/followers/count",
+  optionalAuth,
+  generalLimiter,
+  getAllFollowersCount
+);
+console.log("✅ GET /users/:userId/followers/count route registered");
+
+// 🔥 ROUTE: GET ALL FOLLOWING COUNT
+router.get(
+  "/users/:userId/following/count",
+  optionalAuth,
+  generalLimiter,
+  getAllFollowingCount
+);
+console.log("✅ GET /users/:userId/following/count route registered");
+
+// Get my followers count
+router.get(
+  "/me/followers/count",
+  authMiddleware,
+  generalLimiter,
+  (req, res) => {
+    req.params.userId = req.user.id;
+    getAllFollowersCount(req, res);
+  }
+);
+console.log("✅ GET /me/followers/count route registered");
+
+// Get my following count
+router.get(
+  "/me/following/count",
+  authMiddleware,
+  generalLimiter,
+  (req, res) => {
+    req.params.userId = req.user.id;
+    getAllFollowingCount(req, res);
+  }
+);
+console.log("✅ GET /me/following/count route registered");
 
 // Get user's following list (public)
 router.get(

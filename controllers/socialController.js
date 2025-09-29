@@ -214,6 +214,197 @@ const getFollowers = async (req, res) => {
   }
 };
 
+const getAllFollowersCount = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Validate user exists
+    const User = require("../models/User");
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const Follow = require("../models/Follow");
+
+    // Get total followers count
+    const followersCount = await Follow.countDocuments({
+      following: userId,
+      status: "active",
+      deletedAt: null,
+    });
+
+    // Get detailed breakdown
+    const followersBreakdown = await Follow.aggregate([
+      {
+        $match: {
+          following: new mongoose.Types.ObjectId(userId),
+          status: "active",
+          deletedAt: null,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalFollowers: { $sum: 1 },
+          recentFollowers: {
+            $sum: {
+              $cond: [
+                {
+                  $gte: [
+                    "$followedAt",
+                    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          thisMonthFollowers: {
+            $sum: {
+              $cond: [
+                {
+                  $gte: [
+                    "$followedAt",
+                    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    const breakdown = followersBreakdown[0] || {
+      totalFollowers: 0,
+      recentFollowers: 0,
+      thisMonthFollowers: 0,
+    };
+
+    res.json({
+      success: true,
+      message: "Followers count retrieved successfully",
+      data: {
+        userId,
+        userName: user.name,
+        followersCount,
+        breakdown,
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("Get all followers count error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve followers count",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// 🔥 FUNCTION: GET ALL FOLLOWING COUNT
+const getAllFollowingCount = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Validate user exists
+    const User = require("../models/User");
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const Follow = require("../models/Follow");
+
+    // Get total following count
+    const followingCount = await Follow.countDocuments({
+      follower: userId,
+      status: "active",
+      deletedAt: null,
+    });
+
+    // Get detailed breakdown
+    const followingBreakdown = await Follow.aggregate([
+      {
+        $match: {
+          follower: new mongoose.Types.ObjectId(userId),
+          status: "active",
+          deletedAt: null,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalFollowing: { $sum: 1 },
+          recentFollowing: {
+            $sum: {
+              $cond: [
+                {
+                  $gte: [
+                    "$followedAt",
+                    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          thisMonthFollowing: {
+            $sum: {
+              $cond: [
+                {
+                  $gte: [
+                    "$followedAt",
+                    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    const breakdown = followingBreakdown[0] || {
+      totalFollowing: 0,
+      recentFollowing: 0,
+      thisMonthFollowing: 0,
+    };
+
+    res.json({
+      success: true,
+      message: "Following count retrieved successfully",
+      data: {
+        userId,
+        userName: user.name,
+        followingCount,
+        breakdown,
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("Get all following count error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve following count",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
 // Get user's following list
 const getFollowing = async (req, res) => {
   try {
@@ -642,5 +833,7 @@ module.exports = {
   getFollowSuggestions,
   getSocialFeed,
   getUserProfile,
+  getAllFollowingCount,
+  getAllFollowersCount,
   searchUsers,
 };

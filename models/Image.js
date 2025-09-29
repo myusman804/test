@@ -61,18 +61,35 @@ const commentSchema = new mongoose.Schema(
           required: true,
         },
         userName: String,
+        userEmail: String,
         content: {
           type: String,
           required: true,
           trim: true,
           maxlength: 300,
         },
+        likes: [
+          {
+            user: {
+              type: mongoose.Schema.Types.ObjectId,
+              ref: "User",
+            },
+            userName: String,
+            likedAt: { type: Date, default: Date.now },
+          },
+        ],
+        likeCount: { type: Number, default: 0 },
         createdAt: {
           type: Date,
           default: Date.now,
         },
       },
     ],
+    replyCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,
@@ -153,8 +170,14 @@ const imageSchema = new mongoose.Schema(
     format: {
       type: String,
       required: true,
-      enum: ["jpeg", "jpg", "png", "webp", "gif"],
+      enum: ["jpeg", "jpg", "png", "webp", "gif", "text"], // ADD "text"
       lowercase: true,
+    },
+    postType: {
+      type: String,
+      enum: ["image", "text", "mixed"],
+      default: "image",
+      index: true,
     },
     compressionRatio: {
       type: String,
@@ -392,6 +415,98 @@ imageSchema.methods.removeLike = function (userId) {
   this.likes.splice(likeIndex, 1);
   this.likeCount = this.likes.length;
   return this.save();
+};
+
+imageSchema.methods.addReplyToComment = function (
+  commentId,
+  userId,
+  userName,
+  userEmail,
+  content
+) {
+  const comment = this.comments.id(commentId);
+
+  if (!comment) {
+    throw new Error("Comment not found");
+  }
+
+  const reply = {
+    user: userId,
+    userName,
+    userEmail,
+    content: content.trim(),
+    createdAt: new Date(),
+  };
+
+  comment.replies.push(reply);
+  comment.replyCount = comment.replies.length;
+
+  return reply;
+};
+
+imageSchema.methods.toggleCommentLike = function (commentId, userId, userName) {
+  const comment = this.comments.id(commentId);
+
+  if (!comment) {
+    throw new Error("Comment not found");
+  }
+
+  const likeIndex = comment.likes.findIndex(
+    (like) => like.user.toString() === userId.toString()
+  );
+
+  if (likeIndex !== -1) {
+    // Unlike comment
+    comment.likes.splice(likeIndex, 1);
+    comment.likeCount = comment.likes.length;
+    return { action: "unliked", likeCount: comment.likeCount };
+  } else {
+    // Like comment
+    comment.likes.push({
+      user: userId,
+      userName,
+      likedAt: new Date(),
+    });
+    comment.likeCount = comment.likes.length;
+    return { action: "liked", likeCount: comment.likeCount };
+  }
+};
+
+imageSchema.methods.toggleReplyLike = function (
+  commentId,
+  replyId,
+  userId,
+  userName
+) {
+  const comment = this.comments.id(commentId);
+  if (!comment) {
+    throw new Error("Comment not found");
+  }
+
+  const reply = comment.replies.id(replyId);
+  if (!reply) {
+    throw new Error("Reply not found");
+  }
+
+  const likeIndex = reply.likes.findIndex(
+    (like) => like.user.toString() === userId.toString()
+  );
+
+  if (likeIndex !== -1) {
+    // Unlike reply
+    reply.likes.splice(likeIndex, 1);
+    reply.likeCount = reply.likes.length;
+    return { action: "unliked", likeCount: reply.likeCount };
+  } else {
+    // Like reply
+    reply.likes.push({
+      user: userId,
+      userName,
+      likedAt: new Date(),
+    });
+    reply.likeCount = reply.likes.length;
+    return { action: "liked", likeCount: reply.likeCount };
+  }
 };
 
 imageSchema.methods.addComment = function (
